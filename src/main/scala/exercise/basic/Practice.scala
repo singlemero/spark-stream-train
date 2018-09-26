@@ -83,9 +83,6 @@ object Practice {
     println (255<<7)
 
     println(24704 >> 7)
-
-    Int
-
     println(24704 & 127)
     //println(24704 & )
   }
