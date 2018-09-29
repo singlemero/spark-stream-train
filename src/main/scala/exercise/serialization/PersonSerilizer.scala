@@ -2,7 +2,7 @@ package exercise.serialization
 
 import java.util
 
-import com.spsoft.spark.voucher.vo.DateToLongSerializer
+import com.spsoft.spark.voucher.serializer.DateToLongSerializer
 import exercise.sql.{Person, ZZ}
 import org.apache.kafka.common.serialization.Serializer
 import org.json4s.DefaultFormats

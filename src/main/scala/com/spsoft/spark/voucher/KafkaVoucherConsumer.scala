@@ -6,6 +6,7 @@ import java.util.{Date, Properties, StringJoiner}
 
 import breeze.linalg.max
 import com.google.gson.Gson
+import com.spsoft.spark.voucher.serializer.DateToLongSerializer
 import com.spsoft.spark.voucher.vo._
 import javax.security.auth.Subject
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -23,6 +24,7 @@ import org.json4s.jackson.Serialization.write
 
 import scala.util.parsing.json.JSONObject
 import org.json4s.jackson.Serialization.{write, read => sread}
+
 import scala.collection.JavaConverters._
 
 
@@ -157,6 +159,7 @@ object KafkaVoucherConsumer {
   }
 
   def join1 = {
+
     val sc = sparkSession
     import sc.implicits._
     val df1 = sc.sparkContext.parallelize(Array(

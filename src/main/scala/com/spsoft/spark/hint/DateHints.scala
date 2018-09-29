@@ -1,11 +1,10 @@
-package com.spsoft.spark.voucher
+package com.spsoft.spark.hint
 
 import java.sql.Date
 import java.text.SimpleDateFormat
 import java.util.Calendar
 
-
-object DateCover {
+object DateHints {
 
     implicit class Improvement(val d : Date){   //隐式类
 

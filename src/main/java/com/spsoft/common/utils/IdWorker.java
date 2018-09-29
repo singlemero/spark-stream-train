@@ -16,7 +16,7 @@ import java.util.Map;
  * <p>名称：IdWorker.java</p>Ø
  * <p>描述：分布式自增长ID，其中，加入了IP段信息</p>
  * <pre>
- *     Twitter的 Snowflake　JAVA实现方案
+ *     参照Twitter的 Snowflake修改
  * </pre>
  * 核心代码为其IdWorker这个类实现，其原理结构如下，我分别用一个0表示一位，用—分割开部分的作用：
  * 1||0---0000000000 0000000000 0000000000 0000000000 0 --- 00000 ---00000 ---000000000000
@@ -27,7 +27,7 @@ import java.util.Map;
  * 并且效率较高，经测试，snowflake每秒能够产生26万ID左右，完全满足需要。
  * <p>
  * 
- * 64位ID (42(毫秒)+5(机器ID)+5(业务编码)+12(重复累加))
+ * 64位ID (42(时间毫秒)+2(区域)+16(ip，现在使用partition)+7(自增))
  *
  * @author Polim
  */
@@ -62,7 +62,6 @@ public class IdWorker {
                         if (!"127.0.0.1".equals(ip)) {
                             return ip;
                         }
-                        //return inetAddress.getHostAddress().toString();
                     }
                 }
             }
@@ -72,8 +71,7 @@ public class IdWorker {
         }
         return null;
     }
-	
-	  
+
 	// 时间起始标记点，作为基准，一般取系统的最近时间（一旦确定不能变动）
     private final static long twepoch = 1480166465631L;//DateUtils.valueOf("2017-01-01", "yyyy-MM-dd").getTime(); //1480166465631L
     // 机器标识位数
@@ -102,24 +100,7 @@ public class IdWorker {
     private long workerId = 0;
     // 数据标识id部分
     private long datacenterId = 0;
-    
-    /**
-     * @param workerId
-     *            工作机器ID
-     * @param datacenterId
-     *            序列号
-     */
-   /* public IdWorker(long workerId, long datacenterId) {
-        if (workerId > maxWorkerId || workerId < 0) {
-            throw new IllegalArgumentException(String.format("worker Id can't be greater than %d or less than 0", maxWorkerId));
-        }
-        if (datacenterId > maxDatacenterId || datacenterId < 0) {
-            throw new IllegalArgumentException(String.format("datacenter Id can't be greater than %d or less than 0", maxDatacenterId));
-        }
-        this.workerId = workerId;
-        this.datacenterId = datacenterId;
-    }
-    */
+
 
 	private static ThreadLocal<Long> currId = new ThreadLocal<>();
     
@@ -303,8 +284,5 @@ public class IdWorker {
         }
         return idwork;
     }
-
-
-
 
 }

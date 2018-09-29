@@ -2,7 +2,7 @@ package com.spsoft.spark.voucher.serializer
 
 import java.util
 
-import com.spsoft.spark.voucher.vo.{DateToLongSerializer, SubjectBalanceSlim}
+import com.spsoft.spark.voucher.vo.SubjectBalanceSlim
 import exercise.sql.Person
 import org.apache.kafka.common.serialization.Serializer
 import org.json4s.DefaultFormats

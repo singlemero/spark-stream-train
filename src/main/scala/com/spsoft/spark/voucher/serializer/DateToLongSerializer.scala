@@ -1,9 +1,8 @@
-package com.spsoft.spark.voucher.vo
+package com.spsoft.spark.voucher.serializer
 
 import java.sql.Date
 
-import org.json4s
-import org.json4s.{CustomSerializer, Formats, JLong, JInt, JString, MappingException}
+import org.json4s.{CustomSerializer, JInt, JLong, JString}
 
 class DateToLongSerializer extends CustomSerializer[Date] (format => (
   {
@@ -14,4 +13,4 @@ class DateToLongSerializer extends CustomSerializer[Date] (format => (
   {
     case x: Date => JLong(x.getTime)
   }
-)) //with Serializable
+))

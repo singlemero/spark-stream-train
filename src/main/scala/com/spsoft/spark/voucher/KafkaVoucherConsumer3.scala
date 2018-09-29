@@ -2,8 +2,9 @@ package com.spsoft.spark.voucher
 
 import java.sql.DriverManager
 import java.text.SimpleDateFormat
-import java.util.{Calendar, Date, Properties, ArrayList}
+import java.util.{ArrayList, Calendar, Date, Properties}
 
+import com.spsoft.spark.voucher.serializer.DateToLongSerializer
 import com.spsoft.spark.voucher.vo._
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.serialization.StringDeserializer
@@ -147,12 +148,12 @@ object KafkaVoucherConsumer3 {
           //val oldMonth = dfm.parse(slim.accountPeriod.toString)
           //val months = monthIntval( oldMonth, thisMonth)
           //引入数字日期隐式转换
-          import IntCover._
+          import com.spsoft.spark.hint.IntHints._
           //val months = dfm.parse(slim.accountPeriod.toString).getTime
           //println(s"${slim.companyId} ${slim.accountPeriod} ${slim.subjectCode}月份差：${months}")
           val l = new java.util.ArrayList[SubjectBalanceSlim]()
           //凭证发生月至今有几个月，将之后月份补齐
-          for(i <- m.accountPeriod.months()){
+          for(i <- m.accountPeriod.upTo()){
             //l.add(SubjectBalanceSlim(m.companyId, m.accountPeriod, m.subjectCode.take(a), m.currentDebitAmount, m.currentDebitQty, m.currentCreditAmount, m.currentCreditQty, m.currentDebitNocarryAmount, m.currentCreditNocarryAmount))
             //createSQL(slim)
             l.add(SubjectBalanceSlim(m.companyId, m.accountPeriod, i.toString, m.currentDebitAmount, m.currentDebitQty, m.currentCreditAmount, m.currentCreditQty, m.currentDebitNocarryAmount, m.currentCreditNocarryAmount))

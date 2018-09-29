@@ -11,7 +11,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.google.gson.Gson
 import com.spsoft.spark.voucher.KafkaVoucherConsumer.sparkSession
-import com.spsoft.spark.voucher.vo.{DateToLongSerializer, Vi, Voucher, VoucherItems}
+import com.spsoft.spark.voucher.serializer.DateToLongSerializer
+import com.spsoft.spark.voucher.vo.{Vi, Voucher, VoucherItems}
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Encoders, SparkSession}
@@ -44,14 +45,14 @@ object KafkaVoucherProducer{
 
   def producer: KafkaProducer[String, String] = {
     val props = new Properties()
-    props.put("metadata.broker.list", ZK_NODE)
-    props.put("serializer.class", "kafka.serializer.StringEncoder")
+//    props.put("metadata.broker.list", ZK_NODE) but isn't a known config.
+//    props.put("serializer.class", "kafka.serializer.StringEncoder") but isn't a known config.
     props.put("bootstrap.servers", ZK_NODE)
     //    props.put("partitioner.class", "com.fortysevendeg.biglog.SimplePartitioner")
     props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer")
     props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer")
-    props.put("producer.type", "async")
-    props.put("request.required.acks", "1")
+//    props.put("producer.type", "async") but isn't a known config.
+//    props.put("request.required.acks", "1") but isn't a known config.
     new KafkaProducer[String, String](props)
   }
 
@@ -197,7 +198,7 @@ val mapper = new ObjectMapper()
     }).flatMap(_.toList)
     //list.foreach(println)
     /** */
-    for(msg <- list){
+    for(msg <- messages){
       //val messageStr = new String("Message_" + messageNo)
       System.out.println("Send:" + msg)
       producer.send(new ProducerRecord[String, String](topic, msg))

@@ -1,12 +1,16 @@
-package com.spsoft.spark.voucher.util
+package com.spsoft.spark.utils
 
 import java.sql.Connection
 import java.util.Properties
 
 import com.alibaba.druid.pool.DruidDataSourceFactory
 import javax.sql.DataSource
+import com.spsoft.spark.voucher.common.ProjectConstants._
 import org.slf4j.{Logger, LoggerFactory}
 
+/**
+  * Mysql 连接池
+  */
 object MysqlPoolUtils {
   private val LOG = LoggerFactory.getLogger(MysqlPoolUtils.getClass)
 
@@ -14,7 +18,7 @@ object MysqlPoolUtils {
     try {
       val druidProps = new Properties()
       // 获取Druid连接池的配置文件
-      val druidConfig = getClass.getResourceAsStream("/fw-datasoure-taxdb.properties")
+      val druidConfig = getClass.getResourceAsStream(DATABASE_PROPERTIES_PATH)
       // 倒入配置文件
       druidProps.load(druidConfig)
       Some(DruidDataSourceFactory.createDataSource(druidProps))
@@ -47,11 +51,12 @@ object MysqlPoolUtils {
   }
 
   def main(args: Array[String]): Unit = {
-    val c = getConnection.get.prepareStatement("")
-    //c.setObject()
-    for(i <- 0 to 10){
-      println(getConnection.get)
-    }
+    val l = getClass.getResourceAsStream(DATABASE_PROPERTIES_PATH)
+    val p = new Properties()
+    p.load(l)
+    println(p)
+    println(p.propertyNames())
+
   }
 }
 

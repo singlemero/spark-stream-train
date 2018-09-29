@@ -1,10 +1,10 @@
-package com.spsoft.spark.voucher
+package com.spsoft.spark.hint
 
 import java.sql.Date
 import java.text.SimpleDateFormat
 import java.util.Calendar
 
-object IntCover {
+object IntHints {
 
   implicit class Improvement(val num : Int){   //隐式类
 
@@ -22,7 +22,7 @@ object IntCover {
       }
     }
 
-    def between(d: Date = new Date(System.currentTimeMillis())) = {
+    def calculate(d: Date = new Date(System.currentTimeMillis())) = {
 
       val func = (tmp:java.util.Date)=> {
         val c1 = Calendar.getInstance
@@ -34,8 +34,13 @@ object IntCover {
       func(toDate)
     }
 
-    def months(d: Date = new Date(System.currentTimeMillis())):Seq[Int] = {
-      val months = between(d)
+    /**
+      * 直到指定月份，返回从开始月份到指定月份指定的月份组合，不包含指定月份
+      * @param d
+      * @return
+      */
+    def upTo(d: Date = new Date(System.currentTimeMillis())):Seq[Int] = {
+      val months = calculate(d)
       val c1 = Calendar.getInstance
       c1.setTime(toDate)
       c1.add(Calendar.MONTH, -1)
@@ -45,8 +50,13 @@ object IntCover {
       }
     }
 
-    def months(d: Int):Seq[Int] = {
-      val months = between(new Date(d.toDate.getTime))
+    /**
+      * 直到指定月份，返回从开始月份到指定月份指定的月份组合，不包含指定月份
+      * @param d
+      * @return
+      */
+    def upTo(d: Int):Seq[Int] = {
+      val months = calculate(new Date(d.toDate.getTime))
       val c1 = Calendar.getInstance
       c1.setTime(toDate)
       c1.add(Calendar.MONTH, -1)
@@ -59,7 +69,8 @@ object IntCover {
 
   def main(args: Array[String]): Unit = {
     val i = 201803
-    println(i.months(201805))
-    println(i.months())
+    println(i.upTo(201805))
+    println(i.upTo())
+    println(i.calculate())
   }
 }

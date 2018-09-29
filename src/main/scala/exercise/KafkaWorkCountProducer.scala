@@ -3,7 +3,7 @@ package exercise
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 
-import com.spsoft.spark.voucher.vo.DateToLongSerializer
+import com.spsoft.spark.voucher.serializer.DateToLongSerializer
 import exercise.serialization.PersonSerilizer
 import exercise.sql.Person
 import org.apache.commons.lang3.RandomStringUtils

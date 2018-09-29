@@ -3,9 +3,7 @@ package com.spsoft.spark.voucher
 import java.sql.DriverManager
 import java.text.SimpleDateFormat
 import java.util.{Date, Properties}
-
-import com.spsoft.spark.voucher.KafkaVoucherConsumerOne.{ZK_NODES, kafkaProducer, listenTopic}
-import com.spsoft.spark.voucher.serializer.VoucherDeserializer
+import com.spsoft.spark.voucher.serializer.{DateToLongSerializer, VoucherDeserializer}
 import com.spsoft.spark.voucher.vo._
 import org.apache.commons.lang.math.RandomUtils
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -20,6 +18,7 @@ import org.apache.spark.streaming.kafka010.LocationStrategies.PreferConsistent
 import org.apache.spark.streaming.{Seconds, StreamingContext}
 import org.json4s.DefaultFormats
 import org.json4s.jackson.Serialization.{write, read => sread}
+import com.spsoft.spark.utils.KafkaPropertiesUtils._
 
 import scala.collection.JavaConverters._
 
@@ -79,7 +78,7 @@ object KafkaVoucherConsumerOne1 {
             //分解凭证细表
             val emptyNum = BigDecimal(0)
             //                               vv.isEmpty
-            import IntCover._
+            import com.spsoft.spark.hint.IntHints._
             v.value().items.map(i=>{
               //借方金额、数量
               val debit = if (i.lendingDirection == 1) i.subjectAmount else emptyNum
@@ -95,7 +94,7 @@ object KafkaVoucherConsumerOne1 {
 
               //import DateCover._
 
-              val monthPeriod = (v.value().accountPeriod/100).months()
+              val monthPeriod = (v.value().accountPeriod/100).upTo()
               val r = RandomUtils.nextInt(monthPeriod.length)
 //              SubjectBalanceSlim(v.value().companyId, v.value().accountPeriod/100 - 100 , i.subjectCode.replace("1101","1231"), debit, debitQty, credit, creditQty, debitPure, creditPure)
               //SubjectBalanceSlim(v.value().companyId, v.value().accountPeriod/100 - 100 , i.subjectCode, debit, debitQty, credit, creditQty, debitPure, creditPure)
@@ -141,7 +140,7 @@ object KafkaVoucherConsumerOne1 {
       props.put("producer.type", "async")
       props.put("request.required.acks", "1")
 
-      kafkaProducer = new KafkaProducer[String, String](props)
+      kafkaProducer = new KafkaProducer[String, String](getProperties())
     }
     kafkaProducer
   }

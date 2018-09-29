@@ -1,7 +1,7 @@
 package exercise
 
 import com.spsoft.spark.voucher.MyPartitioner
-import com.spsoft.spark.voucher.vo.{DateToLongSerializer, SubjectBalanceSlim}
+import com.spsoft.spark.voucher.vo.SubjectBalanceSlim
 import exercise.serialization.PersonDeserializer
 import exercise.sql.Person
 import kafka.message.MessageAndMetadata

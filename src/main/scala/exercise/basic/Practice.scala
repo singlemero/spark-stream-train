@@ -45,11 +45,11 @@ object Practice {
   }
 
   def testIntCover = {
-    import com.spsoft.spark.voucher.IntCover._
+    import com.spsoft.spark.hint.IntHints._
     val num  = 201706
-    println(num.between())
-    println(num.months().length)
-    for(i <- num.months()){
+    println(num.calculate())
+    println(num.upTo().length)
+    for(i <- num.upTo()){
       println(i)
     }
   }

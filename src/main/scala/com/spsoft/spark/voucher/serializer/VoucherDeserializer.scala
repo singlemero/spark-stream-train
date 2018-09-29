@@ -3,14 +3,14 @@ package com.spsoft.spark.voucher.serializer
 import java.io.UnsupportedEncodingException
 import java.util
 
-import com.spsoft.spark.voucher.vo.{DateToLongSerializer, SubjectBalanceSlim, Voucher}
+import com.spsoft.spark.voucher.vo.{SubjectBalanceSlim, Voucher}
 import org.apache.kafka.common.errors.SerializationException
 import org.apache.kafka.common.serialization.Deserializer
 import org.json4s.DefaultFormats
 import org.json4s.jackson.Serialization.{read => sread}
 
 /**
-  * 反序列化
+  * 凭证表反序列化
   */
 class VoucherDeserializer extends Deserializer[Voucher]{
 

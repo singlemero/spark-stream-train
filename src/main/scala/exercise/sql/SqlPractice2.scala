@@ -3,7 +3,8 @@ package exercise.sql
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 
-import com.spsoft.spark.voucher.vo.{DateToLongSerializer, VoucherItems}
+import com.spsoft.spark.voucher.serializer.DateToLongSerializer
+import com.spsoft.spark.voucher.vo.VoucherItems
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Encoders, SQLContext, SparkSession}

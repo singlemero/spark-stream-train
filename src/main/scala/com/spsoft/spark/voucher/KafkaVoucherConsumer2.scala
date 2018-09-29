@@ -4,6 +4,7 @@ import java.sql.DriverManager
 import java.text.SimpleDateFormat
 import java.util.{Date, Properties}
 
+import com.spsoft.spark.voucher.serializer.DateToLongSerializer
 import com.spsoft.spark.voucher.vo._
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.serialization.StringDeserializer

@@ -3,7 +3,7 @@ package exercise.serialization
 import java.io.UnsupportedEncodingException
 import java.util
 
-import com.spsoft.spark.voucher.vo.DateToLongSerializer
+import com.spsoft.spark.voucher.serializer.DateToLongSerializer
 import exercise.sql.Person
 import org.apache.kafka.common.errors.SerializationException
 import org.apache.kafka.common.serialization.Deserializer

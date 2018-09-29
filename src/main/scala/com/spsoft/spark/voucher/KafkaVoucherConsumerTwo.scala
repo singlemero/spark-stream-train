@@ -3,6 +3,7 @@ package com.spsoft.spark.voucher
 import java.sql.DriverManager
 import java.util.{Date, Properties}
 
+import com.spsoft.spark.voucher.serializer.DateToLongSerializer
 import com.spsoft.spark.voucher.vo._
 import org.apache.curator.framework.CuratorFrameworkFactory
 import org.apache.curator.retry.ExponentialBackoffRetry

@@ -4,9 +4,9 @@ import java.sql.{Date, DriverManager, Timestamp}
 import java.util.Properties
 
 import com.spsoft.common.utils.IdWorker
-import com.spsoft.spark.voucher.func.MyFunc
-import com.spsoft.spark.voucher.serializer.SubjectBalanceSlimDeserializer
-import com.spsoft.spark.voucher.util.MysqlPoolUtils._
+import com.spsoft.spark.sql.ColumnToRowFunc
+import com.spsoft.spark.voucher.serializer.{DateToLongSerializer, SubjectBalanceSlimDeserializer}
+import com.spsoft.spark.utils.MysqlPoolUtils._
 import com.spsoft.spark.voucher.vo._
 import org.apache.curator.framework.CuratorFrameworkFactory
 import org.apache.curator.retry.ExponentialBackoffRetry
@@ -27,8 +27,6 @@ import scala.collection.mutable
 import org.json4s.DefaultFormats
 import org.json4s.jackson.Serialization.{read => sread}
 //scala和java 集合相互转换
-import com.spsoft.spark.voucher.IntCover._
-import com.spsoft.spark.voucher.DateCover._
 import scala.collection.JavaConverters._
 //引入sql聚合函数
 import org.apache.spark.sql.functions.{expr,col}
@@ -123,6 +121,7 @@ object KafkaVoucherConsumerTwo3 {
     * @return
     */
   def listenTopic(groupName: String, topics: String*): InputDStream[ConsumerRecord[String, String]] = {
+    //val p = new Properties()
     KafkaUtils.createDirectStream[String, String](
       streamContext,
       PreferConsistent,
@@ -244,7 +243,7 @@ object KafkaVoucherConsumerTwo3 {
         /**
           * 2、查询科目表指定公司，指定科目的最小，最大会计属期
           */
-        import DateCover._
+        import com.spsoft.spark.hint.DateHints._
         val balanceDF = getTableDF("at_subject_balance")
         val nowMonth = new Date(System.currentTimeMillis()).month()
         //dstreamDF.show()
@@ -309,26 +308,6 @@ object KafkaVoucherConsumerTwo3 {
             })
             insetBalanceInitial(c)
           })
-          /**
-          val ee = rd.rdd.flatMap(f => {
-              val idWorker = IdWorker.getInstance(MYNAME, TaskContext.get.partitionId)
-              buildInsertBalanceHead(f, idWorker)
-            })
-          println(ee.count())
-
-          ee.foreachPartition(p => {
-            val pid = TaskContext.get().partitionId()
-            val tid = TaskContext.get.partitionId //TODO 理论上应该在每个分区里插入数据
-            p.foreach(m=>{
-              println(s"empt ${tid} ${pid} ${m.toSeq}")
-            })
-            insetBalanceInitial(p)
-          })
-
-          //subjectInfo.show()
-          val cc = ee.collect().toList
-          recordForInsert = cc ++: recordForInsert
-            */
         }
 
         /**
@@ -351,10 +330,12 @@ object KafkaVoucherConsumerTwo3 {
           //addRename(fixTailRecord, fixTailRecord.columns).show()
           val c = balanceDF.where(queryBalanceStr)
           //c.show()
-          val d = addRename(c, c.columns)
-          //d.show()
 
-          val ee = d.as[SubjectBalance].repartition(pNum, $"companyId",$"subjectCode")
+          //val d = addRename(c, c.columns)
+          //d.show()
+          import com.spsoft.spark.hint.DataFrameHints._
+
+          val ee = c.convertNames().as[SubjectBalance].repartition(pNum, $"companyId",$"subjectCode")
           .foreachPartition(p => {
             if(!p.isEmpty){
               val c = p.flatMap(f => {
@@ -365,24 +346,6 @@ object KafkaVoucherConsumerTwo3 {
               insetBalanceInitial(c)
             }
           })
-            /**
-            .rdd.flatMap(f => {
-            val idWorker = IdWorker.getInstance(MYNAME, TaskContext.get.partitionId)
-            buildInsertBalanceTail(f, idWorker,true)
-          })//.collect().toList
-          ee.foreachPartition(p => {
-            val pid = TaskContext.get().partitionId()
-            val tid = TaskContext.get.partitionId //TODO 理论上应该在每个分区里插入数据
-            p.foreach(m=>{
-              println(s"tail ${tid} ${pid} ${m.toSeq}")
-              //insetBalanceInitial(m)
-            })
-
-            if(!p.isEmpty){
-
-            insetBalanceInitial(p)
-            }
-          })*/
         }
         //插入记录
         //insetBalanceInitial(recordForInsert)
@@ -412,11 +375,11 @@ object KafkaVoucherConsumerTwo3 {
             .repartition(pNum,$"companyId",$"subjectCode")//重新分区
             .flatMap(m=>{
             //引入数字日期隐式转换
-            import IntCover._
+            import com.spsoft.spark.hint.IntHints._
             //val l = new java.util.ArrayList[SubjectBalanceSlim]()
             //查看凭证发生日至今的月份间隔，缺失月份要先补
             //使用yield 自动生存scala Seq
-            val months = m.accountPeriod.months()
+            val months = m.accountPeriod.upTo()
             val first = months(0)
             //println(months)
             //println(first)
@@ -564,8 +527,8 @@ object KafkaVoucherConsumerTwo3 {
     val (debitAmount, creditAmount, debitQty, creditQty) = if(s.lendingDirection == 1) (s.initialAmount.bigDecimal, javaBigZero , initQty, javaBigZero)
     else (javaBigZero, s.initialAmount.bigDecimal, javaBigZero, initQty)
 
-    import IntCover._
-    val months = s.accountPeriod.months(s.accountPeriodEnd)
+    import com.spsoft.spark.hint.IntHints._
+    val months = s.accountPeriod.upTo(s.accountPeriodEnd)
     for(month <- if (skipHead) months.tail else months) yield {
       Array[Any](id.nextId(), s.companyId, month, s.subjectId, s.subjectCode, s.subjectName, s.subjectFullName, s.subjectCategory //基本属性
         ,s.lendingDirection, initQty, debitAmount, creditAmount//期初
@@ -593,8 +556,8 @@ object KafkaVoucherConsumerTwo3 {
       if (s.yearCreditNocarryAmount == null) javaBigZero else s.yearCreditNocarryAmount )
 
 
-    import IntCover._
-    val months = s.accountPeriod.months()
+    import com.spsoft.spark.hint.IntHints._
+    val months = s.accountPeriod.upTo()
     for(month <- if (skipHead) months.tail else months) yield {
       Array[Any](id.nextId(), s.companyId, month, s.subjectId, s.subjectCode, s.subjectName, s.subjectFullName, s.subjectCategory //基本属性
         ,s.lendingDirection, initQty, debitAmount, creditAmount//期初，取上个月期末
@@ -751,48 +714,6 @@ object KafkaVoucherConsumerTwo3 {
 
   def jdbcConnection  = {
     DriverManager.getConnection("jdbc:mysql://192.168.55.215:8066/qf_cfgdb?characterEncoding=utf8","qf_user1","hwsofti201710")
-  }
-
-
-  /**
-    * @return
-    */
-  def prepareStatement = {
-    val stmt = jdbcConnection.createStatement()
-  }
-
-  def createSQL(balance: SubjectBalanceSlim): String = {
-    val stringBuilder = new StringBuilder("update gd_test01 set ")
-
-    var setList = List[String]()
-    if(balance.currentCreditAmount != 0){
-      setList = setList :+ s"current_Credit_Amount = current_Credit_Amount + ${balance.currentCreditAmount}"
-    }
-    if(balance.currentCreditQty != 0){
-      setList = setList :+ s"current_Credit_Qty = current_Credit_Qty + ${balance.currentCreditQty}"
-    }
-
-    if(balance.currentCreditNocarryAmount != 0){
-      setList = setList :+ s"current_Credit_Nocarry_Amount = current_Credit_Nocarry_Amount + ${balance.currentCreditNocarryAmount}"
-    }
-
-    if(balance.currentDebitAmount != 0){
-      setList = setList :+ s"current_Debit_Amount = current_Debit_Amount + ${balance.currentDebitAmount}"
-    }
-
-    if(balance.currentDebitQty != 0){
-      setList = setList :+ s"current_Debit_Qty = current_Debit_Qty + ${balance.currentDebitQty}"
-    }
-
-    if(balance.currentDebitNocarryAmount != 0){
-      setList = setList :+ s"current_Debit_Nocarry_Amount = current_Debit_Nocarry_Amount + ${balance.currentDebitNocarryAmount}"
-    }
-    val  sets = org.apache.commons.lang3.StringUtils.join(setList.asJava, ",")
-    stringBuilder.append(sets)
-      .append(s" where company_id = ${balance.companyId} and account_period = ${balance.accountPeriod/100} and subject_code = ${balance.subjectCode}")
-      //.toString()
-    println(stringBuilder.toString())
-    stringBuilder.toString()
   }
 
   def producer = {
