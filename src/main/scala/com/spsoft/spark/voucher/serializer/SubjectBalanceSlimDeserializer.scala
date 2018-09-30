@@ -4,11 +4,10 @@ import java.io.UnsupportedEncodingException
 import java.util
 
 import com.spsoft.spark.voucher.vo.SubjectBalanceSlim
-import exercise.sql.Person
 import org.apache.kafka.common.errors.SerializationException
 import org.apache.kafka.common.serialization.Deserializer
 import org.json4s.DefaultFormats
-import org.json4s.jackson.Serialization.{read => sread}
+import org.json4s.jackson.Serialization.read
 
 /**
   * 科目余额表反序列化
@@ -28,7 +27,7 @@ class SubjectBalanceSlimDeserializer extends Deserializer[SubjectBalanceSlim]{
     implicit val formats = DefaultFormats + new DateToLongSerializer
     try
         if (data == null) return null
-        else return sread[SubjectBalanceSlim](new String(data, encoding))
+        else return read[SubjectBalanceSlim](new String(data, encoding))
     catch {
       case e: UnsupportedEncodingException =>
         throw new SerializationException("Error when deserializing byte[] to string due to unsupported encoding " + encoding)

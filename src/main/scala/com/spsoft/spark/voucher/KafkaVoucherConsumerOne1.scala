@@ -3,6 +3,8 @@ package com.spsoft.spark.voucher
 import java.sql.DriverManager
 import java.text.SimpleDateFormat
 import java.util.{Date, Properties}
+
+import com.spsoft.spark.utils.KafkaProperties
 import com.spsoft.spark.voucher.serializer.{DateToLongSerializer, VoucherDeserializer}
 import com.spsoft.spark.voucher.vo._
 import org.apache.commons.lang.math.RandomUtils
@@ -18,7 +20,7 @@ import org.apache.spark.streaming.kafka010.LocationStrategies.PreferConsistent
 import org.apache.spark.streaming.{Seconds, StreamingContext}
 import org.json4s.DefaultFormats
 import org.json4s.jackson.Serialization.{write, read => sread}
-import com.spsoft.spark.utils.KafkaPropertiesUtils._
+import com.spsoft.spark.utils.KafkaProperties._
 
 import scala.collection.JavaConverters._
 
@@ -28,56 +30,38 @@ import scala.collection.JavaConverters._
   */
 object KafkaVoucherConsumerOne1 {
 
-      val ZK_NODES = "192.168.55.235:9092,192.168.55.236:9092"
-  //val ZK_NODES = "192.168.55.226:9092"
+  val producer = new KafkaProducer[String, String](KafkaProperties.get())
 
-  val kafkaParams = Map[String, Object](
-    "bootstrap.servers" -> ZK_NODES,
-    "key.deserializer" -> classOf[LongDeserializer],
-    "value.deserializer" -> classOf[VoucherDeserializer],
-    "group.id" -> "voucherGroupTwo",
-    //"auto.offset.reset" -> "latest",
-    "enable.auto.commit" -> (false: java.lang.Boolean)
-  )
 
   def main(args: Array[String]): Unit = {
-
-
 
     val sparkConf = new SparkConf().setAppName("ttt").setMaster("local[4]");
     val streamingContext = new StreamingContext(sparkConf, Seconds(1))
     //import streamingContext.implicits._
-    val topics = Array("TopicOne")
+    val params = KafkaProperties.get(Map("value.deserializer"->classOf[VoucherDeserializer], "group.id" -> "voucherGroupTwo" ))
+    //p
+    var (receiveTopic, sendTopic) = (Array("TopicOne"), "TopicTwo")
+//    val topics = Array("TopicOne")
     val stream = KafkaUtils.createDirectStream[String, Voucher](
       streamingContext,
       PreferConsistent,
-      Subscribe[String, Voucher](topics, kafkaParams)
+      Subscribe[String, Voucher](receiveTopic, params.asScala)
     )
+
     stream.foreachRDD(rdd=>{
       //println(rdd)
       if(!rdd.isEmpty()){
         val offsetRanges = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
         rdd.foreachPartition(partitionOfRecords=>{
           val o: OffsetRange = offsetRanges(TaskContext.get.partitionId)
-          //partitionOfRecords.foreach(println)
-          //stream.asInstanceOf[CanCommitOffsets].commitAsync(Array(o))
-
-
 
           implicit val formats = DefaultFormats + new DateToLongSerializer
-          /**partitionOfRecords.map(record=> {
-          println(record)
-          transformJson(record.value())
-        })*/
+
           partitionOfRecords.flatMap(v=>{
             //查找含本年利润的凭证详细
             val profits = v.value().items.find(p=>"本年利润".equals(p.subjectFullName))
-
-            //定义scala的List
-            //var l = List[SubjectBalanceSlim]()
             //分解凭证细表
             val emptyNum = BigDecimal(0)
-            //                               vv.isEmpty
             import com.spsoft.spark.hint.IntHints._
             v.value().items.map(i=>{
               //借方金额、数量
@@ -91,8 +75,6 @@ object KafkaVoucherConsumerOne1 {
               //贷方不含结转金额
               val creditPure = if (profits.isEmpty) credit else emptyNum
               //设置正确的属期
-
-              //import DateCover._
 
               val monthPeriod = (v.value().accountPeriod/100).upTo()
               val r = RandomUtils.nextInt(monthPeriod.length)
@@ -114,13 +96,15 @@ object KafkaVoucherConsumerOne1 {
             //println(r.toString)
             println(s"${TaskContext.get.partitionId} ${o.topic} ${o.partition} ${o.fromOffset} ${o.untilOffset} ${r.toString}")
             //利用这里分区，但这里分区是对kafka 的分区
-            producer.send(new ProducerRecord[String, String]("TopicTwo", s"${r.companyId}${r.subjectCode}",write(r)))
+            producer.send(new ProducerRecord[String, String](sendTopic, s"${r.companyId}${r.subjectCode}",write(r)))
           })
         })
         //保存offset
         stream.asInstanceOf[CanCommitOffsets].commitAsync(offsetRanges)
       }
     })
+
+
     streamingContext.start()
     streamingContext.awaitTermination()
     streamingContext.stop(true,  true);
@@ -128,22 +112,7 @@ object KafkaVoucherConsumerOne1 {
   }
 
 
-  def producer = {
-    if(kafkaProducer == null){
-      val props = new Properties()
-      props.put("metadata.broker.list", ZK_NODES)
-      props.put("serializer.class", "kafka.serializer.StringEncoder")
-      props.put("bootstrap.servers", ZK_NODES)
-      //    props.put("partitioner.class", "com.fortysevendeg.biglog.SimplePartitioner")
-      props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer")
-      props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer")
-      props.put("producer.type", "async")
-      props.put("request.required.acks", "1")
 
-      kafkaProducer = new KafkaProducer[String, String](getProperties())
-    }
-    kafkaProducer
-  }
 
 
 

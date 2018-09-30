@@ -4,6 +4,7 @@ import com.spsoft.common.utils.IdWorker
 import com.spsoft.spark.voucher.vo.SubjectBalance
 import exercise.sql.ZZ
 import org.apache.commons.lang.math.RandomUtils
+import org.apache.kafka.common.serialization.StringDeserializer
 
 import scala.reflect.runtime.universe._
 object Practice {
@@ -108,12 +109,17 @@ object Practice {
 
   }
 
-  def main(args: Array[String]): Unit = {testRandom
+  def testKafkas = {
+    println(classOf[StringDeserializer])
+
+  }
+
+  def main(args: Array[String]): Unit = {
     //caseClass
     //testHashCode
     //testIntCover
     //testReflection
-    testRandom
+    testKafkas
   }
 
 
