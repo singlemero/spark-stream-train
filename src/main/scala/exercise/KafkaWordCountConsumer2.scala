@@ -28,7 +28,7 @@ object KafkaWordCountConsumer2 {
     )
 
     //import streamingContext.implicits._
-    val topics = Array("TopicTwo")
+    val topics = Array("TopicC")
     val stream = KafkaUtils.createDirectStream[String, String](
       streamingContext,
       PreferConsistent,

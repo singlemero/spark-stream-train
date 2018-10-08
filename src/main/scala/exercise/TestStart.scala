@@ -4,8 +4,8 @@ object TestStart {
 
   def main(args: Array[String]): Unit = {
     //partition
-
-    println(List("本年利润","bbb","ccc","本年利润aaa").find(_.contains("本年利润")).toList)
+    normal
+    //println(List("本年利润","bbb","ccc","本年利润aaa").find(_.contains("本年利润")).toList)
   }
 
 

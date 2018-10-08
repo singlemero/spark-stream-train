@@ -1,14 +1,12 @@
 package com.spsoft.spark.utils
 
 import java.sql.{Connection, SQLException}
-import java.util.Properties
 
 import com.alibaba.druid.pool.DruidDataSourceFactory
 import javax.sql.DataSource
-import com.spsoft.spark.voucher.common.ProjectConstants._
 import org.apache.commons.lang3.StringUtils
 import org.apache.spark.TaskContext
-import org.slf4j.{Logger, LoggerFactory}
+import org.slf4j.LoggerFactory
 
 /**
   * Mysql 连接池
@@ -18,11 +16,6 @@ object CloseableMysqlUtils {
 
   val dataSource: Option[DataSource] = {
     try {
-//      val druidProps = new Properties()
-//      // 获取Druid连接池的配置文件
-//      val druidConfig = getClass.getResourceAsStream(DATABASE_PROPERTIES_PATH)
-//      // 倒入配置文件
-//      druidProps.load(druidConfig)
       Some(DruidDataSourceFactory.createDataSource(DataSourceProperties.properties))
     } catch {
       case error: Exception =>

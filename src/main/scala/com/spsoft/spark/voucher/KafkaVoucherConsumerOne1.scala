@@ -37,9 +37,8 @@ object KafkaVoucherConsumerOne1 {
 
     val sparkConf = new SparkConf().setAppName("ttt").setMaster("local[4]");
     val streamingContext = new StreamingContext(sparkConf, Seconds(1))
-    //import streamingContext.implicits._
-    val params = KafkaProperties.get(Map("value.deserializer"->classOf[VoucherDeserializer], "group.id" -> "voucherGroupTwo" ))
-    //p
+    val params = KafkaProperties.get(Map("value.deserializer" -> classOf[VoucherDeserializer], "group.id" -> "voucherGroupTwo" ))
+    println(params)
     var (receiveTopic, sendTopic) = (Array("TopicOne"), "TopicTwo")
 //    val topics = Array("TopicOne")
     val stream = KafkaUtils.createDirectStream[String, Voucher](
@@ -50,6 +49,7 @@ object KafkaVoucherConsumerOne1 {
 
     stream.foreachRDD(rdd=>{
       //println(rdd)
+      rdd.foreachPartition(f=>{f.foreach(println)})
       if(!rdd.isEmpty()){
         val offsetRanges = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
         rdd.foreachPartition(partitionOfRecords=>{
@@ -79,8 +79,8 @@ object KafkaVoucherConsumerOne1 {
               val monthPeriod = (v.value().accountPeriod/100).upTo()
               val r = RandomUtils.nextInt(monthPeriod.length)
 //              SubjectBalanceSlim(v.value().companyId, v.value().accountPeriod/100 - 100 , i.subjectCode.replace("1101","1231"), debit, debitQty, credit, creditQty, debitPure, creditPure)
-              //SubjectBalanceSlim(v.value().companyId, v.value().accountPeriod/100 - 100 , i.subjectCode, debit, debitQty, credit, creditQty, debitPure, creditPure)
-              SubjectBalanceSlim(v.value().companyId, monthPeriod(r) , i.subjectCode, -1*debit, debitQty, -1*credit, creditQty, debitPure, creditPure)
+              SubjectBalanceSlim(v.value().companyId, v.value().accountPeriod/100 - 100 , i.subjectCode, debit, debitQty, credit, creditQty, debitPure, creditPure)
+              //SubjectBalanceSlim(v.value().companyId, monthPeriod(r) , i.subjectCode, -1*debit, debitQty, -1*credit, creditQty, debitPure, creditPure)
               //SubjectBalanceSlim(v.value().companyId, v.value().accountPeriod/100,  i.subjectCode, debit, debitQty, credit, creditQty, debitPure, creditPure)
             })
           }).flatMap(m=> {

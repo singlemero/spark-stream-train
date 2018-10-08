@@ -25,7 +25,6 @@ import scala.collection.JavaConverters._
 //引入sql聚合函数
 import org.apache.spark.sql.functions.{col, expr}
 
-
 /**
   *
   */
@@ -107,8 +106,15 @@ object KafkaVoucherConsumerTwo3 {
           * 1、将Rdd数据转换成可用sql查询的数据，对数据集分组并统计
           */
         val dstreamDF = rdd.map(m=>m.value()).toDF().groupBy("companyId","accountPeriod", "subjectCode")
-          .sum( "currentDebitAmount" , "currentDebitQty","currentDebitNocarryAmount", "currentCreditAmount", "currentCreditQty","currentCreditNocarryAmount")
+          //.sum( "currentDebitAmount" , "currentDebitQty","currentDebitNocarryAmount", "currentCreditAmount", "currentCreditQty","currentCreditNocarryAmount")
+            .agg( expr("sum(currentDebitAmount) as currentDebitAmount"),
+                  expr("sum(currentDebitQty) as currentDebitQty"),
+                  expr("sum(currentDebitNocarryAmount) as currentDebitNocarryAmount"),
+                  expr("sum(currentCreditAmount) as currentCreditAmount"),
+                  expr("sum(currentCreditQty) as currentCreditQty"),
+                  expr("sum(currentCreditNocarryAmount) as currentCreditNocarryAmount"))
 
+        dstreamDF.show()
         //临时缓存
         dstreamDF.cache()
 
@@ -129,14 +135,12 @@ object KafkaVoucherConsumerTwo3 {
           .agg(expr("min(account_period) as accountPeriodStart"),expr("max(account_period) as accountPeriodEnd"))
           .selectExpr("company_id as companyId", "subject_code as subjectCode", "accountPeriodStart", "accountPeriodEnd")
 
-        //balanceFilterDF.show()
         /**
           * 3、将步骤1和步骤2结果并集
           */
 
         val crossDF = dstreamDF.join(balanceFilterDF, Seq("companyId", "subjectCode"), "left_outer")
         crossDF.cache()
-        //crossDF.show()
         /**
           * 4.1 匹配不上的记录,补到最新
           */
@@ -159,7 +163,7 @@ object KafkaVoucherConsumerTwo3 {
 
 
           import com.spsoft.spark.hint.DataFrameHints._
-
+          implicit val BriefVoEncoder = org.apache.spark.sql.Encoders.kryo[SubjectInfoBriefVo]
           val rd = infoDF.where(querySubjectInfoStr).join(emptyRecord, sqlConnectField2).convertNames()
               .repartition(pNum, $"companyId",$"subjectCode").as[SubjectInfoBrief]
 
@@ -215,15 +219,15 @@ object KafkaVoucherConsumerTwo3 {
         if(!dstreamDF.rdd.isEmpty()){
           println("/****************************update******************************/")
           //DF转DS
-          val ds = dstreamDF.withColumnRenamed("sum(currentDebitAmount)", "currentDebitAmount")
-            .withColumnRenamed("sum(currentDebitQty)", "currentDebitQty")
-            .withColumnRenamed("sum(currentDebitNocarryAmount)", "currentDebitNocarryAmount")
-            .withColumnRenamed("sum(currentCreditAmount)", "currentCreditAmount")
-            .withColumnRenamed("sum(currentCreditQty)", "currentCreditQty")
-            .withColumnRenamed("sum(currentCreditNocarryAmount)", "currentCreditNocarryAmount")
-            .withColumnRenamed("company_id", "companyId")
-            .withColumnRenamed("account_period", "accountPeriod")
-            .withColumnRenamed("subject_code", "subjectCode")
+          val ds = dstreamDF//.withColumnRenamed("sum(currentDebitAmount)", "currentDebitAmount")
+            //.withColumnRenamed("sum(currentDebitQty)", "currentDebitQty")
+            //.withColumnRenamed("sum(currentDebitNocarryAmount)", "currentDebitNocarryAmount")
+            //.withColumnRenamed("sum(currentCreditAmount)", "currentCreditAmount")
+            //.withColumnRenamed("sum(currentCreditQty)", "currentCreditQty")
+            //.withColumnRenamed("sum(currentCreditNocarryAmount)", "currentCreditNocarryAmount")
+            //.withColumnRenamed("company_id", "companyId")
+            //.withColumnRenamed("account_period", "accountPeriod")
+            //.withColumnRenamed("subject_code", "subjectCode")
             .as[SubjectBalanceSlim]
           //ds.show()
           implicit val rowEncoder = Encoders.kryo[Array[Any]]

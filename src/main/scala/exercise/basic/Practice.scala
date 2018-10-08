@@ -67,17 +67,69 @@ object Practice {
   }
 
   def testReflection = {
-    //val a = ZZ(33, BigDecimal(8),"lili")
+    val a = ZZ(33, BigDecimal(8),"lili")
     val rm = scala.reflect.runtime.currentMirror
-    val accessors = rm.classSymbol(classOf[SubjectBalance]).toType.members.collect {
+    //获取属姓名
+    val accessors = rm.classSymbol(classOf[ZZ]).toType.members.collect {
       case m: MethodSymbol if m.isCaseAccessor => m
+      //case m: MethodSymbol if m.isGetter && m.isPublic => m
     }
-    //val instanceMirror = rm.reflect(a)
+    val instanceMirror = rm.reflect(a)
 
-    for(acc <- accessors)
-      //println(instanceMirror.reflectField(acc).symbol.name)
-    println(acc)
+    //rm.classSymbol(classOf[ZZ]).toType.
+    rm.classSymbol(classOf[ZZ]).toType.members.foreach(f=>{
+      //println(f)
+    })
+
+    for(acc <- accessors){
+      val c = instanceMirror.reflectField(acc)
+      //println(c.symbol.name)
+      //println(c.symbol)
+      //println(acc)//属性名
       //println(s"$a: ${instanceMirror.reflectMethod(acc).apply()}")
+    }
+
+    val vals = typeOf[ZZ].members.collect{
+      case t: TermSymbol if t.isVal=> t
+    }
+
+    val vars = typeOf[ZZ].members.filter( _ match{
+      case t : TermSymbol => t.isVal
+      case _ => false
+    })
+
+    //rm.reflect(vars)
+    //vals
+
+    vals.foreach( v => v match{
+      case t : TermSymbol => {
+
+            t.getter.asMethod.returnType match{
+              case t if t =:= typeOf[String] => {
+                println("string")
+              }
+              // Primitive型は、JavaUniverse.definitionsに定義されている
+              case definitions.IntTpe => {
+                println("int")
+                //setterMethod(v.toInt)
+              }
+              case definitions.BooleanTpe => {
+                println("BooleanTpe")
+              }
+              case t if t =:= typeOf[BigDecimal] =>{
+                println("big")
+              }
+              case t => println("Unknown type " + t)
+            }
+          }
+      }
+    )
+
+    vals.foreach(v=> v.getter.asMethod.returnType match {
+      case t if t =:= typeOf[String] => println("gggggggg")
+      case t if t =:= typeOf[String] => println("gggggggg")
+      case _ => ;
+    })
   }
 
   def testBit = {
@@ -111,7 +163,11 @@ object Practice {
 
   def testKafkas = {
     println(classOf[StringDeserializer])
+  }
 
+  def testCaseDef = {
+    val z = new ZZ(7,null, "gggg")
+    println(z)
   }
 
   def main(args: Array[String]): Unit = {
@@ -119,7 +175,7 @@ object Practice {
     //testHashCode
     //testIntCover
     //testReflection
-    testKafkas
+    testReflection
   }
 
 

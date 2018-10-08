@@ -12,7 +12,7 @@ import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.google.gson.Gson
 import com.spsoft.spark.voucher.KafkaVoucherConsumer.sparkSession
 import com.spsoft.spark.voucher.serializer.DateToLongSerializer
-import com.spsoft.spark.voucher.vo.{Vi, Voucher, VoucherItems}
+import com.spsoft.spark.voucher.vo.{ Voucher, VoucherItems}
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Encoders, SparkSession}

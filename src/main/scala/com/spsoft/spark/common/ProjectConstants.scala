@@ -1,4 +1,4 @@
-package com.spsoft.spark.voucher.common
+package com.spsoft.spark.common
 
 object ProjectConstants {
 
