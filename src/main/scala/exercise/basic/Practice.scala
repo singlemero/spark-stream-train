@@ -1,6 +1,7 @@
 package exercise.basic
 
 import com.spsoft.common.utils.IdWorker
+import com.spsoft.spark.utils.CloseableMysqlUtils.dataSource
 import com.spsoft.spark.voucher.vo.SubjectBalance
 import exercise.sql.ZZ
 import org.apache.commons.lang.math.RandomUtils
@@ -49,8 +50,8 @@ object Practice {
     import com.spsoft.spark.hint.IntHints._
     val num  = 201706
     println(num.calculate())
-    println(num.upTo().length)
-    for(i <- num.upTo()){
+    println(num.untilYm().length)
+    for(i <- num.untilYm()){
       println(i)
     }
   }
@@ -170,12 +171,47 @@ object Practice {
     println(z)
   }
 
+  def testAlg = {
+    println(Array(1,1,2,2,3,3,4,5,5).reduceLeft(_^_))
+  }
+
+  def testHikariCp = {
+    import com.zaxxer.hikari.HikariDataSource
+    import com.zaxxer.hikari.HikariConfig
+    import com.zaxxer.hikari.HikariDataSource
+    val config = new HikariConfig
+    config.setJdbcUrl("jdbc:mysql://192.168.55.215:8066/qf_accdb?characterEncoding=utf8&useSSL=false")
+    config.setUsername("qf_user1")
+    config.setPassword("hwsofti201710")
+    config.addDataSourceProperty("cachePrepStmts", "true")
+    config.addDataSourceProperty("prepStmtCacheSize", "250")
+    config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048")
+    config.addDataSourceProperty("maximumPoolSize", "20")
+    val ds = new HikariDataSource(config)
+    println(ds)
+    val num = 100;
+    for(i <- 0 to num){
+      new Thread(new Runnable {
+        override def run(): Unit = {
+          val connection = ds.getConnection
+          println(Thread.currentThread().getName + "  " +connection)
+          //connection.close()
+        }
+      }).start()
+    }
+  }
+
   def main(args: Array[String]): Unit = {
     //caseClass
     //testHashCode
     //testIntCover
     //testReflection
-    testReflection
+    //testAlg
+    //println(7^9)
+    //println(0xb111)
+    val i:BigInt = 1538236800000L
+    println(i)
+    testHikariCp
   }
 
 

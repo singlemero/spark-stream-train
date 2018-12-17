@@ -34,19 +34,54 @@ object IntHints {
       func(toDate)
     }
 
+
+
+    /**
+      * 直到指定月份，返回从开始月份到指定月份指定的月份组合
+      * @param d
+      * @return
+      */
+    def toYm(d: Int):Seq[Int] = {
+      val months = calculate(new Date(d.toDate.getTime))
+      val c1 = Calendar.getInstance
+      c1.setTime(toDate)
+      c1.add(Calendar.MONTH, -1)
+      for(i <-0 to months) yield {
+        c1.add(Calendar.MONTH, 1)
+        sdf6.format(c1.getTime).toInt
+      }
+    }
+
+    /**
+      * 到指定月份，返回从开始月份到指定月份指定的月份组合
+      * @param d
+      * @return
+      */
+    def toYm(d: Date = new Date(System.currentTimeMillis())):Seq[Int] = {
+      val months = calculate(d)
+      val c1 = Calendar.getInstance
+      c1.setTime(toDate)
+      c1.add(Calendar.MONTH, -1)
+      for(i <-0 to months) yield {
+        c1.add(Calendar.MONTH, 1)
+        sdf6.format(c1.getTime).toInt
+      }
+    }
+
+
     /**
       * 直到指定月份，返回从开始月份到指定月份指定的月份组合，不包含指定月份
       * @param d
       * @return
       */
-    def upTo(d: Date = new Date(System.currentTimeMillis())):Seq[Int] = {
+    def untilYm(d: Date = new Date(System.currentTimeMillis())):Seq[Int] = {
       val months = calculate(d)
       val c1 = Calendar.getInstance
       c1.setTime(toDate)
       c1.add(Calendar.MONTH, -1)
       for(i <-0 until months) yield {
-          c1.add(Calendar.MONTH, 1)
-          sdf6.format(c1.getTime).toInt
+        c1.add(Calendar.MONTH, 1)
+        sdf6.format(c1.getTime).toInt
       }
     }
 
@@ -55,7 +90,7 @@ object IntHints {
       * @param d
       * @return
       */
-    def upTo(d: Int):Seq[Int] = {
+    def untilYm(d: Int):Seq[Int] = {
       val months = calculate(new Date(d.toDate.getTime))
       val c1 = Calendar.getInstance
       c1.setTime(toDate)
@@ -68,9 +103,10 @@ object IntHints {
   }
 
   def main(args: Array[String]): Unit = {
-    val i = 201803
-    println(i.upTo(201805))
-    println(i.upTo())
+    val i = 201805
+    println(i.untilYm(201805))
+    println(i.toYm(201805))
+    println(i.untilYm())
     println(i.calculate())
   }
 }

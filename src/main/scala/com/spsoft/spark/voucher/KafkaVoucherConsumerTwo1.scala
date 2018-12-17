@@ -5,7 +5,7 @@ import java.util.Properties
 
 import com.spsoft.common.utils.IdWorker
 import com.spsoft.spark.utils.KafkaProperties._
-import com.spsoft.spark.utils.{ApplicationProperties, DataSourcePoolUtils, DataSourceProperties}
+import com.spsoft.spark.utils.{ApplicationProperties, DataSourcePoolUtils, DataSourceProperties, RedisUtils}
 import com.spsoft.spark.voucher.serializer.{DateToLongSerializer, SubjectBalanceSlimDeserializer}
 import com.spsoft.spark.voucher.vo._
 import org.apache.commons.lang3.StringUtils
@@ -28,7 +28,7 @@ import org.apache.spark.sql.functions.{col, expr}
 /**
   *
   */
-object KafkaVoucherConsumerTwo {
+object KafkaVoucherConsumerTwo1 {
 
   private val LOG = LoggerFactory.getLogger(KafkaVoucherConsumerTwo.getClass)
 
@@ -41,6 +41,20 @@ object KafkaVoucherConsumerTwo {
 
   //val producer = new KafkaProducer[String, String](get())
 
+  val DS_MAP = List(
+    List(
+      "jdbc:mysql://192.168.55.205:3306/lr_frwdb?characterEncoding=utf8&useSSL=false",
+      "jdbc:mysql://192.168.55.205:3306/lr_taxdb?characterEncoding=utf8&useSSL=false"),
+    List(
+      "jdbc:mysql://192.168.55.206:3306/lr_frwdb?characterEncoding=utf8&useSSL=false",
+      "jdbc:mysql://192.168.55.206:3306/lr_taxdb?characterEncoding=utf8&useSSL=false"))
+
+  val DATABASE_URL = List(
+    Array("jdbc:mysql://192.168.55.211:3306/lr_taxdb?characterEncoding=utf8&useSSL=false","lr_dba","hwsoft"),
+    Array("jdbc:mysql://192.168.55.212:3306/lr_taxdb?characterEncoding=utf8&useSSL=false","lr_dba","hwsoft")
+//    Map("url" -> "jdbc:mysql://192.168.55.211:3306/lr_taxdb?characterEncoding=utf8&useSSL=false","user" -> "lr_dba", "password" -> "hwsoft"),
+//    Map("url" -> "jdbc:mysql://192.168.55.212:3306/lr_taxdb?characterEncoding=utf8&useSSL=false","user" -> "lr_dba", "password" -> "hwsoft")
+  )
   /**
     * kafka参数
     * @return
@@ -48,6 +62,23 @@ object KafkaVoucherConsumerTwo {
   def kafkaParams: mutable.Map[String,Object] = {
     get(Map[String, Object]("value.deserializer" -> classOf[SubjectBalanceSlimDeserializer], "group.id" -> GROUP_NAME)).asScala
   }
+
+
+//  def findDataSource(companyId:Long, sparkSession: SparkSession) = {
+//    val str = RedisUtils.get(companyId.toString)
+//    if(StringUtils.isBlank(str)){
+//      val foundRecord = DS_MAP.find(l=> {
+//        val cnt = getTableDF("CD_COMPANYS", l(0),  sparkSession).where(s"companyid = ${companyId}").count()
+//        cnt > 0
+//      })
+//      val list = foundRecord.get
+//      val realUrl = list(1)
+//      val found = getTableDF("CD_COMPANYS", sparkSession).where(s"companyid = ${companyId}").count()
+////      if(found){
+////
+////      }
+//    }
+//  }
 
   def getTableDF(talbe: String, sparkSession: SparkSession): DataFrame = {
     val ds = Array("url", "username", "password").map(DataSourceProperties.get)
@@ -58,11 +89,23 @@ object KafkaVoucherConsumerTwo {
     sparkSession.read.jdbc(ds.head, talbe, properties)
   }
 
+  def getTableDF(talbe: String, dsArray: Array[String], sparkSession: SparkSession): DataFrame = {
+//    val mc = Map("url" -> "jdbc:mysql://192.168.55.211:3306/lr_taxdb?characterEncoding=utf8&useSSL=false","user" -> "lr_dba", "password" -> "hwsoft")
+//    val a = Array("","")
+
+//    val ds = Array("url", "username", "password").map(m.get.)
+    val properties = new Properties()
+    properties.put("user",    dsArray(1))
+    properties.put("password",dsArray(2))
+    properties.put("numPartitions", "8")
+    sparkSession.read.jdbc(dsArray.head, talbe, properties)
+  }
+
   def main(args: Array[String]): Unit = {
 
     val sparkSession = SparkSession.builder()
       .appName("VoucherOperationAndInsertDb1")
-      //.master(ApplicationProperties.get("spark.master"))
+      .master(ApplicationProperties.get("spark.master"))
       .config("spark.sql.caseSensitive", "false")
       .config("spark.sql.shuffle.partitions", "4")
       .config("spark.streaming.stopGracefullyOnShutdown","true")
@@ -94,6 +137,8 @@ object KafkaVoucherConsumerTwo {
       import sparkSession.implicits._
 
       if(!rdd.isEmpty()){
+//        RedisUtils.get()
+
         val emptyNum = BigDecimal(0)
         val offsetRanges = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
 
@@ -114,11 +159,7 @@ object KafkaVoucherConsumerTwo {
         //临时缓存
         dstreamDF.persist()
 
-        /**
-          * 2、查询科目表指定公司，指定科目的最小，最大会计属期
-          */
         import com.spsoft.spark.hint.DateHints._
-        val balanceDF = getTableDF(TARGET_TABLE, sparkSession)
         /**
           * 当前属期，下一个属期
           */
@@ -126,6 +167,19 @@ object KafkaVoucherConsumerTwo {
 
         val queryMinAndMaxStr = rdd.map(m=>m.value()).map(m=> s"""(company_id = ${m.companyId}  and subject_code = '${m.subjectCode}')""")
           .reduce(_ + " or " +_)
+
+        /**
+          * 2、查询科目表指定公司，指定科目的最小，最大会计属期
+          */
+
+//        val balanceDF = {
+//          val d1 = getTableDF(TARGET_TABLE, DATABASE_URL(0), sparkSession)
+//          val d2 = getTableDF(TARGET_TABLE, DATABASE_URL(1), sparkSession)
+//          d1.union(d2)
+//        }
+        val balanceDF = DATABASE_URL.map(url => getTableDF(TARGET_TABLE, url, sparkSession)).reduce(_.union(_))
+
+
         //print(queryMinAndMaxStr)
         val balanceFilterDF = balanceDF
           .where(queryMinAndMaxStr)
@@ -143,7 +197,7 @@ object KafkaVoucherConsumerTwo {
           */
 
         val sqlConnectField2 = Seq("company_id", "subject_code")
-        val infoDF = getTableDF("cd_subject_info", sparkSession)
+        val infoDF = DATABASE_URL.map(url => getTableDF("cd_subject_info", url, sparkSession)).reduce(_.union(_))
         /**
           * 如果没有会计属期开始记录（最小会计属期）或会计属期开始记录小于未来一个月的属期
           * 例1：插入记录属期201808，当前最小201810，从201808补到201809
@@ -475,6 +529,9 @@ object KafkaVoucherConsumerTwo {
                          |YEAR_DEBIT_AMOUNT, YEAR_CREDIT_AMOUNT,YEAR_CREDIT_QTY,YEAR_DEBIT_QTY, YEAR_DEBIT_NOCARRY_AMOUNT, YEAR_CREDIT_NOCARRY_AMOUNT,
                          |SUBJECT_PARENT_CODE, CREATE_TIME)
                          |VALUES(?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?,?)""".stripMargin.replaceAll("\n", StringUtils.EMPTY)
+
+      println(executeSQL)
+//      data.toList.foreach(a => println(a.toSeq))
       DataSourcePoolUtils.executeBatch(executeSQL, data)
     }
   }

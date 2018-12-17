@@ -10,7 +10,7 @@ object TestStart {
 
 
   def normal = {
-    val producer = new KafkaWorkCountProducer("TopicC");
+    val producer = new KafkaWorkCountProducer("Voucher4Spark");
     new Thread(producer).start()
   }
 

@@ -5,8 +5,9 @@ import java.io.StringWriter
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.google.gson.Gson
-import com.spsoft.spark.voucher.serializer.DateToLongSerializer
-import com.spsoft.spark.voucher.vo.VoucherItems
+import com.spsoft.spark.voucher.VoucherB
+import com.spsoft.spark.voucher.serializer.{DateToLongSerializer, StringToIntSerializer}
+import com.spsoft.spark.voucher.vo.{Voucher, VoucherItems}
 import exercise.sql.ZZ
 import org.json4s.DefaultFormats
 import org.json4s.jackson.Serialization.{read => sread, write => swrite}
@@ -34,6 +35,25 @@ object JsonExample {
     println(target)
   }
 
+  def testJackson1 = {
+    //object to string
+    println("****************** testJackson *******************")
+    val origin = ZZ(BigInt(3), BigDecimal(33),"adfadsf")
+
+    val mapper = new ObjectMapper()
+    mapper.registerModule(DefaultScalaModule)
+    val out = new StringWriter
+    mapper.writeValue(out, origin)
+    val jsonStr = out.toString()
+    println(jsonStr)
+    val str = """{"accountPeriod":"201809","companyId":3217,"items":[{"companyId":3217,"currencyCode":"RMB","exchangeRate":1.000000,"lendingDirection":2,"memoItemIds":[],"notaxActPrice":0E-8,"originalAmount":-333.00,"qty":0E-8,"saleunitName":"","subjectAmount":-333.00,"subjectCode":"60010001","subjectFullName":"主营业务收入-外（免）收入","subjectId":1219295214389987921,"subjectSort":10,"voucherAbstract":"销售收入","voucherDirection":1,"voucherId":1880455538631805824,"voucherItemsId":1880455538631805827,"voucherTime":1538236800000},{"companyId":3217,"currencyCode":"RMB","exchangeRate":1.000000,"lendingDirection":1,"memoItemIds":[],"notaxActPrice":0E-8,"originalAmount":-333.00,"qty":0E-8,"saleunitName":"","subjectAmount":-333.00,"subjectCode":"1531","subjectFullName":"长期应收款","subjectId":1219295214356433490,"subjectSort":11,"voucherAbstract":"支付工资","voucherDirection":2,"voucherId":1880455538631805824,"voucherItemsId":1880455538631805828,"voucherTime":1538236800000}],"voucherId":1880455538631805824}"""
+    //string to object classOf[List[VoucherItems]] for array
+    import com.fasterxml.jackson.databind.DeserializationFeature
+    mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+    val target = mapper.readValue(str, classOf[Voucher])
+    println(target)
+  }
+
   def testGson = {
     println("****************** testGson *******************")
     val origin = ZZ(BigInt(3), BigDecimal(33),"adfadsf")
@@ -50,9 +70,22 @@ object JsonExample {
   }
 
 
+  def testJson4s1 = {
+    println("****************** testJson4s *******************")
+    import com.fasterxml.jackson.databind.SerializationFeature
+    //import org.json4s.jackson.JsonMethods._
+    import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
+    org.json4s.jackson.JsonMethods.mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+    implicit val formats = DefaultFormats + new DateToLongSerializer() + new StringToIntSerializer()
+    val str = """{"accountPeriod":"201809","companyId":3217,"items":[{"companyId":3217,"currencyCode":"RMB","exchangeRate":1.000000,"lendingDirection":2,"memoItemIds":[],"notaxActPrice":0E-8,"originalAmount":-333.00,"qty":0E-8,"saleunitName":"","subjectAmount":-333.00,"subjectCode":"60010001","subjectFullName":"主营业务收入-外（免）收入","subjectId":1219295214389987921,"subjectSort":10,"voucherAbstract":"销售收入","voucherDirection":1,"voucherId":1880455538631805824,"voucherItemsId":1880455538631805827,"voucherTime":1538236800000},{"companyId":3217,"currencyCode":"RMB","exchangeRate":1.000000,"lendingDirection":1,"memoItemIds":[],"notaxActPrice":0E-8,"originalAmount":-333.00,"qty":0E-8,"saleunitName":"","subjectAmount":-333.00,"subjectCode":"1531","subjectFullName":"长期应收款","subjectId":1219295214356433490,"subjectSort":11,"voucherAbstract":"支付工资","voucherDirection":2,"voucherId":1880455538631805824,"voucherItemsId":1880455538631805828,"voucherTime":1538236800000}],"voucherId":1880455538631805824}"""
+    val target = sread[Voucher](str)
+    //val target = str.extract[Voucher]
+    println(target)
+  }
+
   def main(args: Array[String]): Unit = {
-    testGson
-    testJson4s
-    testJackson
+    //testGson
+    testJackson1
+    //testJson4s1
   }
 }

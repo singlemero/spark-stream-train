@@ -102,7 +102,7 @@ case class SubjectInfoBrief(companyId: Int,
   * @param id
   * @param items
   */
-case class Voucher(id: BigInt,companyId: Int, accountPeriod: Int, codes: String, items: List[VoucherItems])
+case class Voucher(voucherId: BigInt,companyId: Int, accountPeriod: Int, items: List[VoucherItems])
 
 
 /**

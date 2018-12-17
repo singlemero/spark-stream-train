@@ -6,6 +6,8 @@ object ProjectConstants {
 
   val KAFKA_PROPERTIES_PATH = "/fw-kafka.properties"
 
+  val APPLICATION_PATH = "/application.properties"
+
   val ZERO_BIGDECIMAL = BigDecimal(0)
 
   val INTERVAL_SECOND = 1

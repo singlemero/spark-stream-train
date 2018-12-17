@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory
 
 object KafkaProperties extends PropertiesLoader {
 
-  private val LOG = LoggerFactory.getLogger(CloseableMysqlUtils.getClass)
+  private val LOG = LoggerFactory.getLogger(KafkaProperties.getClass)
 
   override def inputStream: String = KAFKA_PROPERTIES_PATH
 

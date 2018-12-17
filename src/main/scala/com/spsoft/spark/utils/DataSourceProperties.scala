@@ -5,7 +5,7 @@ import org.slf4j.LoggerFactory
 
 object DataSourceProperties extends PropertiesLoader {
 
-  private val LOG = LoggerFactory.getLogger(CloseableMysqlUtils.getClass)
+  private val LOG = LoggerFactory.getLogger(DataSourceProperties.getClass)
 
   override def inputStream: String = DATABASE_PROPERTIES_PATH
 

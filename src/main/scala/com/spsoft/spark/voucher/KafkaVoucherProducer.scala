@@ -1,24 +1,15 @@
 package com.spsoft.spark.voucher
-import java.io.StringWriter
 import java.text.SimpleDateFormat
-import java.{sql, util}
-
-import org.apache.kafka.clients.producer.{ProducerRecord, _}
-import java.util.{Date, Properties}
+import java.util.Properties
 import java.util.concurrent.TimeUnit
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import com.google.gson.Gson
-import com.spsoft.spark.voucher.KafkaVoucherConsumer.sparkSession
 import com.spsoft.spark.voucher.serializer.DateToLongSerializer
-import com.spsoft.spark.voucher.vo.{ Voucher, VoucherItems}
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
+import com.spsoft.spark.voucher.vo.{Voucher, VoucherItems}
+import org.apache.kafka.clients.producer.{ProducerRecord, _}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Encoders, SparkSession}
 import org.json4s._
-import org.json4s.jackson.JsonMethods._
-import org.json4s.jackson.Serialization.{read, write}
+import org.json4s.jackson.Serialization.write
 
 
 
@@ -27,8 +18,8 @@ import org.json4s.jackson.Serialization.{read, write}
   */
 object KafkaVoucherProducer{
 
-  val ZK_NODE = "192.168.55.235:9092,192.168.55.236:9092"
-  //val ZK_NODE = "192.168.55.226:9092"
+//  val ZK_NODE = "192.168.55.235:9092,192.168.55.236:9092"
+  val ZK_NODE = "192.168.55.209:9092,192.168.55.210:9092"
 
   def sparkSession: SparkSession = {
     SparkSession.builder().appName("JdbcVoucherOperation").master("local[4]").getOrCreate()
@@ -36,7 +27,7 @@ object KafkaVoucherProducer{
 
   def getTableDF(talbe: String): DataFrame = {
     //val url = "jdbc:mysql://192.168.55.215:8066/qf_accdb?characterEncoding=utf8"  //开发
-    val url = "jdbc:mysql://192.168.55.205:8060/qf_accdb?characterEncoding=utf8"
+    val url = "jdbc:mysql://192.168.55.205:8066/qf_accdb?characterEncoding=utf8"
     val properties = new Properties()
     properties.put("user","qf_user1")
     properties.put("password","hwsofti201710")
@@ -59,7 +50,7 @@ object KafkaVoucherProducer{
 
   def main(args: Array[String]): Unit = {
     var messageNo = 1
-    val topic = "TopicOne"
+    val topic = "Voucher4Spark"//"TopicOne"
     val sc = sparkSession
     import sc.implicits._
     //44182519870716021x
@@ -116,7 +107,7 @@ object KafkaVoucherProducer{
       */
       //3591 开发
       //1 验证
-    val ds = voucherItemDF.filter($"company_id" === 2 and $"subject_code".isin(List("11010002","11230001"): _*)  ).select(
+    val ds = voucherItemDF.filter($"company_id" === 4784 and $"subject_code".isin(List("11010002","11230001"): _*)  ).select(
       $"VOUCHER_ITEMS_ID" as("voucherItemsId"),
       $"VOUCHER_ID" as("voucherId"),
       $"COMPANY_ID" as("companyId"),
@@ -171,7 +162,8 @@ val mapper = new ObjectMapper()
     }
 
     //val messages = map.mapValues(f=> write(f.toList)).map(b=> b._2)//.foreach(println)
-    val messages = map.map(f=> Voucher(f._1, f._2.head.companyId, f._2.head.voucherTime, null,  f._2.toList)).map(write(_))//.mapValues(f=> write(f.toList)).map(b=> b._2)//.foreach(println)
+    val messages = map.map(f=> Voucher(f._1, 850,//f._2.head.companyId,
+      f._2.head.voucherTime, f._2.toList)).map(write(_))//.mapValues(f=> write(f.toList)).map(b=> b._2)//.foreach(println)
 
 
     //t.foreach(k  => printf(k._1.toString()))
