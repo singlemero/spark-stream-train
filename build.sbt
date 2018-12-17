@@ -15,7 +15,8 @@ libraryDependencies ++= Seq(
   "org.json4s" %% "json4s-jackson" % "3.6.0",
   "org.scala-lang.modules" %% "scala-xml" % "1.1.0",
   "com.zaxxer" % "HikariCP" % "3.2.0",
-  "io.lettuce" % "lettuce-core" % "5.1.3.RELEASE"
+  "io.lettuce" % "lettuce-core" % "5.1.3.RELEASE",
+"org.scalanlp" %% "breeze" % "1.0-RC2"
 )
 
 assemblyMergeStrategy in assembly := {

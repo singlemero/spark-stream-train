@@ -6,7 +6,7 @@ import scala.collection.mutable
 
 object DataFrameHints {
 
-  implicit class Improvement(val d : DataFrame) { //隐式类
+  implicit class ConvertCamelcase(val d : DataFrame) { //隐式类
 
 
     private def rename(dataFrame: DataFrame, t: Array[Tuple2[String, String]]): DataFrame = {

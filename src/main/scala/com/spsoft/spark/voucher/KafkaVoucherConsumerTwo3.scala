@@ -239,7 +239,8 @@ object KafkaVoucherConsumerTwo3 {
             //val l = new java.util.ArrayList[SubjectBalanceSlim]()
             //查看凭证发生日至今的月份间隔，缺失月份要先补
             //使用yield 自动生存scala Seq
-            val months = m.accountPeriod.upTo()
+            import com.spsoft.spark.hint.IntHints._
+            val months = m.accountPeriod.toYm()
             val first = months(0)
 
             for(i <- months) yield {
@@ -328,7 +329,7 @@ object KafkaVoucherConsumerTwo3 {
     else (javaBigZero, s.initialAmount.bigDecimal, javaBigZero, initQty)
 
     import com.spsoft.spark.hint.IntHints._
-    val months = s.accountPeriod.upTo(s.accountPeriodEnd)
+    val months = s.accountPeriod.untilYm(s.accountPeriodEnd)
     for(month <- if (skipHead) months.tail else months) yield {
       Array[Any](id.nextId(), s.companyId, month, s.subjectId, s.subjectCode, s.subjectName, s.subjectFullName, s.subjectCategory //基本属性
         ,s.lendingDirection, initQty, debitAmount, creditAmount//期初
@@ -357,7 +358,7 @@ object KafkaVoucherConsumerTwo3 {
 
 
     import com.spsoft.spark.hint.IntHints._
-    val months = s.accountPeriod.upTo()
+    val months = s.accountPeriod.untilYm()
     for(month <- if (skipHead) months.tail else months) yield {
       Array[Any](id.nextId(), s.companyId, month, s.subjectId, s.subjectCode, s.subjectName, s.subjectFullName, s.subjectCategory //基本属性
         ,s.lendingDirection, initQty, debitAmount, creditAmount//期初，取上个月期末

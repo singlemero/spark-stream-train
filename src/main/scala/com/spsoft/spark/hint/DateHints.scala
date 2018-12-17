@@ -6,7 +6,7 @@ import java.util.Calendar
 
 object DateHints {
 
-    implicit class Improvement(val d : Date){   //隐式类
+    implicit class DateMonths(val d : Date){   //隐式类
 
       private val sdf8 = new SimpleDateFormat("yyyyMMdd")
 

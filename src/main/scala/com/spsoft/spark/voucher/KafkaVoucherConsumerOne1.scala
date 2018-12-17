@@ -76,7 +76,8 @@ object KafkaVoucherConsumerOne1 {
               val creditPure = if (profits.isEmpty) credit else emptyNum
               //设置正确的属期
 
-              val monthPeriod = (v.value().accountPeriod/100).upTo()
+              import com.spsoft.spark.hint.IntHints._
+              val monthPeriod = (v.value().accountPeriod/100).toYm()
               val r = RandomUtils.nextInt(monthPeriod.length)
 //              SubjectBalanceSlim(v.value().companyId, v.value().accountPeriod/100 - 100 , i.subjectCode.replace("1101","1231"), debit, debitQty, credit, creditQty, debitPure, creditPure)
               SubjectBalanceSlim(v.value().companyId, v.value().accountPeriod/100 - 100 , i.subjectCode, debit, debitQty, credit, creditQty, debitPure, creditPure)

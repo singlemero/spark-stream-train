@@ -18,6 +18,7 @@ import org.apache.spark.streaming.{Seconds, StreamingContext}
 import org.slf4j.LoggerFactory
 
 import scala.collection.mutable
+import scala.util.{Failure, Success, Try}
 //Json解析必备
 import org.json4s.DefaultFormats
 //scala和java 集合相互转换
@@ -39,21 +40,10 @@ object KafkaVoucherConsumerTwo1 {
 
   val TARGET_TABLE = "GD_TEST01"
 
-  //val producer = new KafkaProducer[String, String](get())
-
-  val DS_MAP = List(
-    List(
-      "jdbc:mysql://192.168.55.205:3306/lr_frwdb?characterEncoding=utf8&useSSL=false",
-      "jdbc:mysql://192.168.55.205:3306/lr_taxdb?characterEncoding=utf8&useSSL=false"),
-    List(
-      "jdbc:mysql://192.168.55.206:3306/lr_frwdb?characterEncoding=utf8&useSSL=false",
-      "jdbc:mysql://192.168.55.206:3306/lr_taxdb?characterEncoding=utf8&useSSL=false"))
 
   val DATABASE_URL = List(
     Array("jdbc:mysql://192.168.55.211:3306/lr_taxdb?characterEncoding=utf8&useSSL=false","lr_dba","hwsoft"),
     Array("jdbc:mysql://192.168.55.212:3306/lr_taxdb?characterEncoding=utf8&useSSL=false","lr_dba","hwsoft")
-//    Map("url" -> "jdbc:mysql://192.168.55.211:3306/lr_taxdb?characterEncoding=utf8&useSSL=false","user" -> "lr_dba", "password" -> "hwsoft"),
-//    Map("url" -> "jdbc:mysql://192.168.55.212:3306/lr_taxdb?characterEncoding=utf8&useSSL=false","user" -> "lr_dba", "password" -> "hwsoft")
   )
   /**
     * kafka参数
@@ -64,21 +54,6 @@ object KafkaVoucherConsumerTwo1 {
   }
 
 
-//  def findDataSource(companyId:Long, sparkSession: SparkSession) = {
-//    val str = RedisUtils.get(companyId.toString)
-//    if(StringUtils.isBlank(str)){
-//      val foundRecord = DS_MAP.find(l=> {
-//        val cnt = getTableDF("CD_COMPANYS", l(0),  sparkSession).where(s"companyid = ${companyId}").count()
-//        cnt > 0
-//      })
-//      val list = foundRecord.get
-//      val realUrl = list(1)
-//      val found = getTableDF("CD_COMPANYS", sparkSession).where(s"companyid = ${companyId}").count()
-////      if(found){
-////
-////      }
-//    }
-//  }
 
   def getTableDF(talbe: String, sparkSession: SparkSession): DataFrame = {
     val ds = Array("url", "username", "password").map(DataSourceProperties.get)
@@ -90,15 +65,182 @@ object KafkaVoucherConsumerTwo1 {
   }
 
   def getTableDF(talbe: String, dsArray: Array[String], sparkSession: SparkSession): DataFrame = {
-//    val mc = Map("url" -> "jdbc:mysql://192.168.55.211:3306/lr_taxdb?characterEncoding=utf8&useSSL=false","user" -> "lr_dba", "password" -> "hwsoft")
-//    val a = Array("","")
-
-//    val ds = Array("url", "username", "password").map(m.get.)
     val properties = new Properties()
     properties.put("user",    dsArray(1))
     properties.put("password",dsArray(2))
     properties.put("numPartitions", "8")
     sparkSession.read.jdbc(dsArray.head, talbe, properties)
+  }
+
+  /**
+    * 如果没有会计属期开始记录（最小会计属期）或会计属期开始记录小于未来一个月的属期
+    * 例1：插入记录属期201808，当前最小201810，从201808补到201809
+    * 例2：插入记录属期201808，没有最小属期，当前最新201811，从201808补到201811
+    * @param dataFrame
+    * @param infoDF
+    * @param sparkSession
+    */
+  def before(dataFrame: DataFrame, infoDF: DataFrame, sparkSession: SparkSession) = {
+    import com.spsoft.spark.hint.DateHints._
+    import sparkSession.implicits._
+    import com.spsoft.spark.hint.DataFrameHints._
+    implicit val BriefVoEncoder = org.apache.spark.sql.Encoders.kryo[SubjectInfoBriefVo]
+//    println(dataFrame.rdd.partitions.size)
+    val nextYM = new Date(System.currentTimeMillis()).nextMonth()
+    val emptyRecord = dataFrame
+      .filter(col("accountPeriodStart").isNull || (col("accountPeriodStart").isNotNull && col("accountPeriod") < col("accountPeriodStart")))
+      .selectExpr("companyId as company_id","subjectCode as subject_code", "accountPeriod", s"(case when accountPeriodStart is null then ${nextYM} else accountPeriodStart end) as accountPeriodEnd")
+
+    if(!emptyRecord.rdd.isEmpty()){
+      println("/****************************empty 或者凭证所属期小于最小科目余额业务属期******************************/")
+      val querySubjectInfoStr = emptyRecord.rdd.map(row => {
+        s"""(company_id = ${row.getAs[Int]("company_id")} and subject_code = '${row.getAs[String]("subject_code")}')"""
+      }).reduce(_ + " or " + _)
+
+
+
+      val rd = infoDF.where(querySubjectInfoStr)
+        .join(emptyRecord, Seq("company_id", "subject_code"))
+        .convertNames()
+        .repartition(8, $"companyId",$"subjectCode")
+        .as[SubjectInfoBrief]
+
+      rd.foreachPartition(p => {
+        val c = p.flatMap(f => {
+          val idWorker = IdWorker.getInstance(IDWORK_NAME, TaskContext.get.partitionId)
+          buildInsertBalanceHead(f, idWorker)
+        })
+        try{
+          insetBalanceInitial(c)
+        }catch {
+          case e:java.sql.SQLException => {
+            LOG.error(s"插入指定公司科目余额表数据发生异常！(Head)\r\n ${c.toSeq}")
+            e.printStackTrace()
+          }
+        }
+      })
+    }
+  }
+
+  /**
+    * 当前记录大于最大属期或当前最大属期小于最新，从最大属期补到最新 ，获取最大会计属期记录补到最新，最大会计属期不补，例：最大属期201810，当前最新201811，只补201811
+    * @param dataFrame
+    * @param balanceDF
+    * @param sparkSession
+    */
+  def after(dataFrame: DataFrame, balanceDF: DataFrame, sparkSession: SparkSession) = {
+    import com.spsoft.spark.hint.DateHints._
+    import sparkSession.implicits._
+    import com.spsoft.spark.hint.DataFrameHints._
+//    println(dataFrame.rdd.partitions.size)
+    val currentYM = new Date(System.currentTimeMillis()).month()
+    val fixTailRecord = dataFrame
+      .filter(col("accountPeriodStart").isNotNull && (col("accountPeriod") > col("accountPeriodEnd"))
+      || col("accountPeriodEnd") < currentYM
+    ).selectExpr("companyId as company_id","subjectCode as subject_code", "accountPeriodEnd", s"${currentYM} as accountPeriodNow")
+    //fixTailRecord.show()
+    if(!fixTailRecord.rdd.isEmpty()){
+      println("/****************************tail******************************/")
+      //获取科目余额表指定公司、科目、科目的记录
+      val queryBalanceStr = fixTailRecord.rdd.map(row => {
+        s"""(company_id = ${row.getAs[Int]("company_id")} and subject_code = '${row.getAs[String]("subject_code")}') and account_period = ${row.getAs[Int]("accountPeriodEnd")}"""
+      }).reduce(_ + " or " + _)
+
+      val c = balanceDF.where(queryBalanceStr)
+
+      val ee = c.convertNames().as[SubjectBalance].repartition(8, $"companyId",$"subjectCode")
+        .foreachPartition(p => {
+          if(!p.isEmpty){
+            val c = p.flatMap(f => {
+              val idWorker = IdWorker.getInstance(IDWORK_NAME, TaskContext.get.partitionId)
+              //忽略最大属期
+              buildInsertBalanceTail(f, idWorker,true)
+            })
+            try{
+              insetBalanceInitial(c)
+            }catch {
+              case e:java.sql.SQLException => {
+                LOG.error(s"插入指定公司科目余额表数据发生异常！(Tail)\\r\\n ${c.toSeq}")
+                e.printStackTrace()
+              }
+            }
+          }
+        })
+    }
+  }
+
+  def updateR (dstreamDF: DataFrame, balanceDF: DataFrame, sparkSession: SparkSession) = {
+    import sparkSession.implicits._
+    import com.spsoft.spark.hint.IntHints._
+
+    //理论上df大于0
+    if(!dstreamDF.rdd.isEmpty()){
+      println("/****************************update******************************/")
+      //DF转DS
+      val ds = dstreamDF.as[SubjectBalanceSlim]
+      val emptyNum = BigDecimal(0)
+      //ds.show()
+      implicit val rowEncoder = Encoders.kryo[Array[Any]]
+      val dd = ds.orderBy("companyId","accountPeriod", "subjectCode")
+//        .repartition(8,$"companyId",$"subjectCode")//重新分区
+        .flatMap(m=>{
+        //引入数字日期隐式转换
+
+        //val l = new java.util.ArrayList[SubjectBalanceSlim]()
+        //查看凭证发生日至今的月份间隔，缺失月份要先补
+        //使用yield 自动生存scala Seq
+        val months = m.accountPeriod.toYm()
+        LOG.warn(s"find months start:${m} ${months}")
+        val first = months(0)
+        val year = first/100
+        for(i <- months) yield {
+          val unitNum = if (m.currentDebitQty != null && m.currentDebitQty >0) m.currentDebitQty else m.currentCreditQty;
+          if (i == first)
+          //本期发生，期初借贷增加值为0
+            SubjectBalanceMedium(m.companyId, i, m.subjectCode,
+              emptyNum, emptyNum, emptyNum, //期初
+              m.currentDebitAmount, m.currentDebitQty,  m.currentDebitNocarryAmount, m.currentCreditAmount, m.currentCreditQty, m.currentCreditNocarryAmount, //本期
+              m.currentDebitAmount, m.currentCreditAmount, unitNum, //期末
+              m.currentDebitAmount, m.currentDebitQty,  m.currentDebitNocarryAmount, m.currentCreditAmount, m.currentCreditQty, m.currentCreditNocarryAmount //本年
+            )
+          else
+          //未来的期初及期末增加值=本期发生额，未来的本期无发生额，未来的期末增加值=期末增加值，未来的本年累计增加值=本期发生额
+            if(year == i/100){
+              SubjectBalanceMedium(m.companyId, i, m.subjectCode,
+                m.currentDebitAmount, m.currentCreditAmount, unitNum, //期初
+                emptyNum, emptyNum, emptyNum, emptyNum, emptyNum, emptyNum, //本期
+                m.currentDebitAmount, m.currentCreditAmount, unitNum, //期末
+                m.currentDebitAmount, m.currentDebitQty,  m.currentDebitNocarryAmount, m.currentCreditAmount, m.currentCreditQty, m.currentCreditNocarryAmount //本年
+              )
+            }else{
+            //不同年份，本年借贷内容为0
+            SubjectBalanceMedium(m.companyId, i, m.subjectCode,
+              m.currentDebitAmount, m.currentCreditAmount, unitNum, //期初
+              emptyNum, emptyNum, emptyNum, emptyNum, emptyNum, emptyNum, //本期
+              m.currentDebitAmount, m.currentCreditAmount, unitNum, //期末
+              emptyNum, emptyNum,  emptyNum, emptyNum, emptyNum, emptyNum //本年
+            )
+          }
+
+        }
+      }).map(buildUpdate)
+      //通过此项查看通过一系列转换后分区数据是否能对上
+
+      dd.foreachPartition(ls => {
+        val pid = TaskContext.get().partitionId()
+        //println(s"${pid} ${ls}")
+
+        if(!ls.isEmpty){
+          Try(updateBalance(ls)) match {
+            case Success(re) => None
+            case Failure(ex) => {
+              LOG.error(s"更新指定公司科目余额表数据发生异常！\\r\\n ${ls.toSeq}")
+              ex.printStackTrace()
+            }
+          }
+        }
+      })
+    }
   }
 
   def main(args: Array[String]): Unit = {
@@ -107,7 +249,7 @@ object KafkaVoucherConsumerTwo1 {
       .appName("VoucherOperationAndInsertDb1")
       .master(ApplicationProperties.get("spark.master"))
       .config("spark.sql.caseSensitive", "false")
-      .config("spark.sql.shuffle.partitions", "4")
+      .config("spark.sql.shuffle.partitions", "8")
       .config("spark.streaming.stopGracefullyOnShutdown","true")
       .config("spark.debug.maxToStringFields","200")
       .config("spark.cleaner.ttl","2000")
@@ -137,8 +279,6 @@ object KafkaVoucherConsumerTwo1 {
       import sparkSession.implicits._
 
       if(!rdd.isEmpty()){
-//        RedisUtils.get()
-
         val emptyNum = BigDecimal(0)
         val offsetRanges = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
 
@@ -154,16 +294,15 @@ object KafkaVoucherConsumerTwo1 {
                   expr("sum(currentCreditAmount) as currentCreditAmount"),
                   expr("sum(currentCreditQty) as currentCreditQty"),
                   expr("sum(currentCreditNocarryAmount) as currentCreditNocarryAmount"))
-          //.repartition(rdd.getNumPartitions, $"companyId",$"subjectCode")
+//           .repartition(rdd.getNumPartitions, $"companyId",$"subjectCode")
 
         //临时缓存
         dstreamDF.persist()
 
-        import com.spsoft.spark.hint.DateHints._
         /**
           * 当前属期，下一个属期
           */
-        val (currentYM, nextYM) = (new Date(System.currentTimeMillis()).month(), new Date(System.currentTimeMillis()).nextMonth())
+//        val (currentYM, nextYM) = (new Date(System.currentTimeMillis()).month(), new Date(System.currentTimeMillis()).nextMonth())
 
         val queryMinAndMaxStr = rdd.map(m=>m.value()).map(m=> s"""(company_id = ${m.companyId}  and subject_code = '${m.subjectCode}')""")
           .reduce(_ + " or " +_)
@@ -172,13 +311,8 @@ object KafkaVoucherConsumerTwo1 {
           * 2、查询科目表指定公司，指定科目的最小，最大会计属期
           */
 
-//        val balanceDF = {
-//          val d1 = getTableDF(TARGET_TABLE, DATABASE_URL(0), sparkSession)
-//          val d2 = getTableDF(TARGET_TABLE, DATABASE_URL(1), sparkSession)
-//          d1.union(d2)
-//        }
         val balanceDF = DATABASE_URL.map(url => getTableDF(TARGET_TABLE, url, sparkSession)).reduce(_.union(_))
-
+//  .repartition(8,$"companyId",$"subjectCode")
 
         //print(queryMinAndMaxStr)
         val balanceFilterDF = balanceDF
@@ -190,151 +324,20 @@ object KafkaVoucherConsumerTwo1 {
           * 3、将步骤1和步骤2结果并集
           */
 
-        val crossDF = dstreamDF.join(balanceFilterDF, Seq("companyId", "subjectCode"), "left_outer")//.repartition(rdd.getNumPartitions, $"companyId",$"subjectCode")
-
+        val crossDF = dstreamDF.join(balanceFilterDF, Seq("companyId", "subjectCode"), "left_outer")
+//          .repartition(8,$"companyId",$"subjectCode")
         /**
           * 4.1 匹配不上的记录,补到最新
           */
 
         val sqlConnectField2 = Seq("company_id", "subject_code")
         val infoDF = DATABASE_URL.map(url => getTableDF("cd_subject_info", url, sparkSession)).reduce(_.union(_))
-        /**
-          * 如果没有会计属期开始记录（最小会计属期）或会计属期开始记录小于未来一个月的属期
-          * 例1：插入记录属期201808，当前最小201810，从201808补到201809
-          * 例2：插入记录属期201808，没有最小属期，当前最新201811，从201808补到201811
-          */
-        val emptyRecord = crossDF.filter(col("accountPeriodStart").isNull || (col("accountPeriodStart").isNotNull && col("accountPeriod") < col("accountPeriodStart")))
-          .selectExpr("companyId as company_id","subjectCode as subject_code", "accountPeriod", s"(case when accountPeriodStart is null then ${nextYM} else accountPeriodStart end) as accountPeriodEnd")
-
-
-        //emptyRecord.show()
         val pNum = rdd.getNumPartitions
-        if(!emptyRecord.rdd.isEmpty()){
-          println("/****************************empty 或者凭证所属期小于最小科目余额业务属期******************************/")
-          val querySubjectInfoStr = emptyRecord.rdd.map(row => {
-            s"""(company_id = ${row.getAs[Int]("company_id")} and subject_code = '${row.getAs[String]("subject_code")}')"""
-          }).reduce(_ + " or " + _)
 
-          import com.spsoft.spark.hint.DataFrameHints._
-          implicit val BriefVoEncoder = org.apache.spark.sql.Encoders.kryo[SubjectInfoBriefVo]
+        before(crossDF, infoDF, sparkSession)
+        after(crossDF, balanceDF, sparkSession)
+        updateR(dstreamDF, balanceDF, sparkSession)
 
-          val rd = infoDF.where(querySubjectInfoStr).join(emptyRecord, sqlConnectField2).convertNames()
-              .repartition(pNum, $"companyId",$"subjectCode").as[SubjectInfoBrief]
-
-          rd.foreachPartition(p => {
-            val c = p.flatMap(f => {
-              val idWorker = IdWorker.getInstance(IDWORK_NAME, TaskContext.get.partitionId)
-              buildInsertBalanceHead(f, idWorker)
-            })
-              try{
-                insetBalanceInitial(c)
-              }catch {
-                case e:java.sql.SQLException => {
-                  LOG.error(s"插入指定公司科目余额表数据发生异常！(Head)\r\n ${c.toSeq}")
-                  e.printStackTrace()
-                }
-            }
-          })
-        }
-
-        /**
-          * 4.2 当前记录大于最大属期或当前最大属期小于最新，从最大属期补到最新 ，获取最大会计属期记录补到最新，最大会计属期不补，例：最大属期201810，当前最新201811，只补201811
-          */
-        val fixTailRecord = crossDF.filter(col("accountPeriodStart").isNotNull && (col("accountPeriod") > col("accountPeriodEnd"))
-        || col("accountPeriodEnd") < currentYM
-        )
-          .selectExpr("companyId as company_id","subjectCode as subject_code", "accountPeriodEnd", s"${currentYM} as accountPeriodNow")
-        //fixTailRecord.show()
-        if(!fixTailRecord.rdd.isEmpty()){
-          println("/****************************tail******************************/")
-          //获取科目余额表指定公司、科目、科目的记录
-          val queryBalanceStr = fixTailRecord.rdd.map(row => {
-            s"""(company_id = ${row.getAs[Int]("company_id")} and subject_code = '${row.getAs[String]("subject_code")}') and account_period = ${row.getAs[Int]("accountPeriodEnd")}"""
-          }).reduce(_ + " or " + _)
-
-          val c = balanceDF.where(queryBalanceStr)
-          import com.spsoft.spark.hint.DataFrameHints._
-
-          val ee = c.convertNames().as[SubjectBalance].repartition(pNum, $"companyId",$"subjectCode")
-          .foreachPartition(p => {
-            if(!p.isEmpty){
-              val c = p.flatMap(f => {
-                val idWorker = IdWorker.getInstance(IDWORK_NAME, TaskContext.get.partitionId)
-                //忽略最大属期
-                buildInsertBalanceTail(f, idWorker,true)
-              })
-                try{
-                  insetBalanceInitial(c)
-                }catch {
-                  case e:java.sql.SQLException => {
-                    LOG.error(s"插入指定公司科目余额表数据发生异常！(Tail)\\r\\n ${c.toSeq}")
-                    e.printStackTrace()
-                  }
-                }
-            }
-          })
-        }
-
-        /**
-          * 5 更新记录
-          */
-        //理论上df大于0
-        if(!dstreamDF.rdd.isEmpty()){
-          println("/****************************update******************************/")
-          //DF转DS
-          val ds = dstreamDF.as[SubjectBalanceSlim]
-          //ds.show()
-          implicit val rowEncoder = Encoders.kryo[Array[Any]]
-          val dd = ds.orderBy("companyId","accountPeriod", "subjectCode")
-            .repartition(pNum,$"companyId",$"subjectCode")//重新分区
-            .flatMap(m=>{
-            //引入数字日期隐式转换
-            import com.spsoft.spark.hint.IntHints._
-            //val l = new java.util.ArrayList[SubjectBalanceSlim]()
-            //查看凭证发生日至今的月份间隔，缺失月份要先补
-            //使用yield 自动生存scala Seq
-            val months = m.accountPeriod.toYm()
-            LOG.warn(s"find months start:${m} ${months}")
-            val first = months(0)
-
-            for(i <- months) yield {
-              val unitNum = if (m.currentDebitQty != null && m.currentDebitQty >0) m.currentDebitQty else m.currentCreditQty;
-              if (i == first)
-                //本期发生，期初借贷增加值为0
-                SubjectBalanceMedium(m.companyId, i, m.subjectCode,
-                  emptyNum, emptyNum, emptyNum, //期初
-                  m.currentDebitAmount, m.currentDebitQty,  m.currentDebitNocarryAmount, m.currentCreditAmount, m.currentCreditQty, m.currentCreditNocarryAmount, //本期
-                  m.currentDebitAmount, m.currentCreditAmount, unitNum, //期末
-                  m.currentDebitAmount, m.currentDebitQty,  m.currentDebitNocarryAmount, m.currentCreditAmount, m.currentCreditQty, m.currentCreditNocarryAmount //本年
-                )
-              else
-              //未来的期初及期末增加值=本期发生额，未来的本期无发生额，未来的期末增加值=期末增加值，未来的本年累计增加值=本期发生额
-                SubjectBalanceMedium(m.companyId, i, m.subjectCode,
-                  m.currentDebitAmount, m.currentCreditAmount, unitNum, //期初
-                  emptyNum, emptyNum, emptyNum, emptyNum, emptyNum, emptyNum, //本期
-                  m.currentDebitAmount, m.currentCreditAmount, unitNum, //期末
-                  m.currentDebitAmount, m.currentDebitQty,  m.currentDebitNocarryAmount, m.currentCreditAmount, m.currentCreditQty, m.currentCreditNocarryAmount //本年
-                )
-            }
-          }).map(buildUpdate)
-          //通过此项查看通过一系列转换后分区数据是否能对上
-
-          dd.foreachPartition(ls => {
-            val pid = TaskContext.get().partitionId()
-            //println(s"${pid} ${ls}")
-
-            if(!ls.isEmpty){
-                try{
-                    updateBalance(ls)
-                }catch {
-                  case e:java.sql.SQLException => {
-                    LOG.error(s"更新指定公司科目余额表数据发生异常！\\r\\n ${ls.toSeq}")
-                    e.printStackTrace()
-                  }
-                }
-              }
-          })
-        }
         //保存offset
         stream.asInstanceOf[CanCommitOffsets].commitAsync(offsetRanges)
       }
@@ -412,6 +415,12 @@ object KafkaVoucherConsumerTwo1 {
     }
   }
 
+
+  def nullReplaceZero(b: BigDecimal): BigDecimal  ={
+    if(b == null) BigDecimal(0) else b
+  }
+
+
   def buildInsertBalanceTail(s: SubjectBalance, id:IdWorker, skipHead: Boolean = false): Seq[Array[Any]] ={
     //val debitAmount = if(s.lendingDirection == 1) s.initialAmount else BigDecimal(0)
     //val creditAmount = if(s.lendingDirection == 2) s.initialAmount else BigDecimal(0)
@@ -420,12 +429,12 @@ object KafkaVoucherConsumerTwo1 {
     val initQty = if( s.endingQty == null) javaBigZero else s.endingQty //初始数量取期末
     val (debitAmount, creditAmount) = (s.endingDebitAmount, s.endingCreditAmount)
     val (yearDebitAmount, yearDebitQty, yearDebitNocarryAmount, yearCreditAmount, yearCreditQty, yearCreditNocarryAmount)  = (
-      if (s.yearDebitAmount == null) javaBigZero else s.yearDebitNocarryAmount ,
-      if (s.yearCreditAmount == null) javaBigZero else s.yearCreditAmount ,
-      if (s.yearCreditQty == null) javaBigZero else s.yearCreditQty ,
-      if (s.yearCreditAmount == null) javaBigZero else s.yearCreditAmount ,
-      if (s.yearCreditQty == null) javaBigZero else s.yearCreditQty ,
-      if (s.yearCreditNocarryAmount == null) javaBigZero else s.yearCreditNocarryAmount )
+      nullReplaceZero(s.yearDebitNocarryAmount) ,
+      nullReplaceZero(s.yearCreditAmount) ,
+      nullReplaceZero(s.yearCreditQty),
+      nullReplaceZero(s.yearCreditAmount ),
+      nullReplaceZero(s.yearCreditQty),
+      nullReplaceZero(s.yearCreditNocarryAmount))
 
 
     import com.spsoft.spark.hint.IntHints._
@@ -509,6 +518,7 @@ object KafkaVoucherConsumerTwo1 {
       val sqlArray = for(d <- data) yield {
         update.format(d: _*)
       }
+//      sqlArray.foreach(println)
       DataSourcePoolUtils.executeBatch(sqlArray)
   }
 
@@ -529,9 +539,7 @@ object KafkaVoucherConsumerTwo1 {
                          |YEAR_DEBIT_AMOUNT, YEAR_CREDIT_AMOUNT,YEAR_CREDIT_QTY,YEAR_DEBIT_QTY, YEAR_DEBIT_NOCARRY_AMOUNT, YEAR_CREDIT_NOCARRY_AMOUNT,
                          |SUBJECT_PARENT_CODE, CREATE_TIME)
                          |VALUES(?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?,?)""".stripMargin.replaceAll("\n", StringUtils.EMPTY)
-
-      println(executeSQL)
-//      data.toList.foreach(a => println(a.toSeq))
+//      data.foreach(a=> println(a.toSeq))
       DataSourcePoolUtils.executeBatch(executeSQL, data)
     }
   }

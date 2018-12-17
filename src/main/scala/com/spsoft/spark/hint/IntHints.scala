@@ -6,7 +6,7 @@ import java.util.Calendar
 
 object IntHints {
 
-  implicit class Improvement(val num : Int){   //隐式类
+  implicit class IntMonths(val num : Int){   //隐式类
 
     private val sdf8 = new SimpleDateFormat("yyyyMMdd")
 
@@ -104,6 +104,7 @@ object IntHints {
 
   def main(args: Array[String]): Unit = {
     val i = 201805
+    println(i/100)
     println(i.untilYm(201805))
     println(i.toYm(201805))
     println(i.untilYm())

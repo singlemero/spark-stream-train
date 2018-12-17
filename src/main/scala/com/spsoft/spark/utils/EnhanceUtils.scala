@@ -1,5 +1,9 @@
 package com.spsoft.spark.utils
 
+import java.sql.Date
+
+import org.apache.spark.sql.DataFrame
+
 import scala.util.{Failure, Success, Try}
 
 object EnhanceUtils {
@@ -49,11 +53,30 @@ object EnhanceUtils {
     fun(cond1(p).orElse(cond2(p)).get)
   }
 
+  def crop[A,B,R](a:A)(fun:(A)=>A) = {
+    fun(a)
+  }
+
+  def cc[B](a:DataFrame,b: B)(fun:(DataFrame)=>B) = {
+
+  }
+
+  def crop(d: java.sql.Date) = {
+    import com.spsoft.spark.hint.DateHints._
+    print(d.nextMonth())
+//    Some(a).getOrElse(BigDecimal(0))
+  }
+
   def main(args: Array[String]): Unit = {
     val f = (s:String) => s.length
     val c1 = () => None
     val c2 = () => Some("this gg")
-    println(switchCond(f, c1, c2))
-    println(switchCond1(f, "dsfdasfadsfadsfdsafds"){c1=> None}{c2=> Some(c2)})
+    //println(switchCond(f, c1, c2))
+    //println(switchCond1(f, "dsfdasfadsfadsfdsafds"){c1=> None}{c2=> Some(c2)})
+
+
+
+
+    crop(new Date(System.currentTimeMillis()))
   }
 }
