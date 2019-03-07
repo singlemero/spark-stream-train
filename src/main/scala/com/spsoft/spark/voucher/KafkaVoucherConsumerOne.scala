@@ -35,7 +35,7 @@ object KafkaVoucherConsumerOne {
 
     val sparkSession = SparkSession.builder()
       .appName("ClassifyVoucherCode")
-      .master(ApplicationProperties.get("spark.master"))
+//      .master(ApplicationProperties.get("spark.master"))
       .config("spark.streaming.stopGracefullyOnShutdown","true")
       .config("spark.sql.session.timeZone","Asia/Shanghai")
       .getOrCreate()
@@ -88,8 +88,8 @@ object KafkaVoucherConsumerOne {
                 val creditPure = if (profits.isEmpty) credit else emptyNum
                 //设置正确的属期
 
-                val monthPeriod = (v.value().accountPeriod / 100).untilYm()
-                val r = RandomUtils.nextInt(monthPeriod.length)
+//                val monthPeriod = (v.value().accountPeriod / 100).untilYm()
+//                val r = RandomUtils.nextInt(monthPeriod.length)
                 //              SubjectBalanceSlim(v.value().companyId, v.value().accountPeriod/100 - 100 , i.subjectCode.replace("1101","1231"), debit, debitQty, credit, creditQty, debitPure, creditPure)
                 //SubjectBalanceSlim(v.value().companyId, v.value().accountPeriod/100 - 100 , i.subjectCode, debit, debitQty, credit, creditQty, debitPure, creditPure)
                 //SubjectBalanceSlim(v.value().companyId, monthPeriod(r) , i.subjectCode, -1*debit, debitQty, -1*credit, creditQty, debitPure, creditPure)
@@ -106,8 +106,8 @@ object KafkaVoucherConsumerOne {
               //发送到kafka做下一步处理
             }).foreach(r => {
               //此处无法保证事务唯一性
-              println(r.toString)
-              LOG.warn(s"${TaskContext.get.partitionId} ${o.topic} ${o.partition} ${o.fromOffset} ${o.untilOffset} ${r.toString}")
+//              println(r.toString)
+              LOG.info(s"${TaskContext.get.partitionId} ${o.topic} ${o.partition} ${o.fromOffset} ${o.untilOffset} ${r.toString}")
               //利用这里分区，但这里分区是对kafka 的分区
               producer.send(new ProducerRecord[String, String](sendTopic, s"${r.companyId}${r.subjectCode}", write(r)))
             })

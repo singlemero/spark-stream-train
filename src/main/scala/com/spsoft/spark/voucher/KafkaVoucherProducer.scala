@@ -126,7 +126,7 @@ object KafkaVoucherProducer{
       $"QTY" as("qty"),
       $"NOTAX_ACT_PRICE" as("notaxActPrice"),
       $"SUBJECT_SORT" as("subjectSort")
-    ).as[VoucherItems]
+    ).as[VoucherItems].limit(1)
             // ds.explain(true)
     ds.show()
 

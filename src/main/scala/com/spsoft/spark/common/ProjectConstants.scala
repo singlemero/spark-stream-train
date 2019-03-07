@@ -8,6 +8,8 @@ object ProjectConstants {
 
   val APPLICATION_PATH = "/application.properties"
 
+  val DATABASE_PROPERTIES_PATH1 = "/fw-datasoure.properties"
+
   val ZERO_BIGDECIMAL = BigDecimal(0)
 
   val INTERVAL_SECOND = 1

@@ -17,22 +17,10 @@ import scala.util.{Failure, Success, Try}
 object CloseableMysqlUtils {
   private val LOG = LoggerFactory.getLogger(CloseableMysqlUtils.getClass)
 
-//  lazy val config: HikariConfig = {
-//    val config = new HikariConfig
-//    config.setJdbcUrl("jdbc:mysql://192.168.55.215:8066/qf_accdb?characterEncoding=utf8&useSSL=false")
-//    config.setUsername("qf_user1")
-//    config.setPassword("hwsofti201710")
-//    config.addDataSourceProperty("cachePrepStmts", "true")
-//    config.addDataSourceProperty("prepStmtCacheSize", "250")
-//    config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048")
-//    config.addDataSourceProperty("maximumPoolSize", "20")
-//    config
-//  }
 
   lazy val config: HikariConfig = {
-
+    LOG.info(s"DataSource ${DataSourceProperties.get("url")}")
     val config = new HikariConfig
-    print(DataSourceProperties.get("url"))
     config.setJdbcUrl(DataSourceProperties.get("url"))
     config.setUsername(DataSourceProperties.get("username"))
     config.setPassword(DataSourceProperties.get("password"))
@@ -92,7 +80,7 @@ object CloseableMysqlUtils {
   }
 
   def main(args: Array[String]): Unit = {
-    val num = 1000;
+    val num = 10;
     for(i <- 0 to num){
       new Thread(new Runnable {
         override def run(): Unit = {
@@ -102,7 +90,6 @@ object CloseableMysqlUtils {
         }
       }).start()
     }
-
   }
 }
 

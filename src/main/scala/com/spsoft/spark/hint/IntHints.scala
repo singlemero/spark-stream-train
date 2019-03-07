@@ -109,5 +109,6 @@ object IntHints {
     println(i.toYm(201805))
     println(i.untilYm())
     println(i.calculate())
+    print(s"${new java.util.Date()}")
   }
 }
