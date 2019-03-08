@@ -36,7 +36,7 @@ object DatabaseProperties extends PropertiesLoader{
 //      (v._1,c)
 //    }}
       {p=>
-        (p._1, XX(
+        (p._1, BriefMeta(
           p._2.find(m=>m._1.contains("url")).get._2,
           p._2.find(m=>m._1.contains("user")).get._2,
           p._2.find(m=>m._1.contains("password")).get._2
@@ -58,4 +58,4 @@ object DatabaseProperties extends PropertiesLoader{
   }
 }
 
-case class XX(url:String,  user: String , password: String)
+

@@ -5,7 +5,7 @@ import java.util.Properties
 
 import com.spsoft.common.utils.IdWorker
 import com.spsoft.spark.utils.KafkaProperties._
-import com.spsoft.spark.utils.{ApplicationProperties, DataSourcePoolUtils, DataSourceProperties}
+import com.spsoft.spark.utils._
 import com.spsoft.spark.voucher.serializer.{DateToLongSerializer, SubjectBalanceSlimDeserializer}
 import com.spsoft.spark.voucher.vo._
 import org.apache.commons.lang3.StringUtils
@@ -25,7 +25,7 @@ import org.json4s.DefaultFormats
 import scala.collection.JavaConverters._
 //引入sql聚合函数
 import org.apache.spark.sql.functions.{col, expr}
-
+import com.spsoft.spark.utils.DatabaseProperties.{meta => JMETA}
 /**
   *
   */
@@ -39,6 +39,8 @@ object KafkaVoucherConsumerTwo1 {
   val IDWORK_NAME = "SUBJECT_BALANCE"
 
   val TARGET_TABLE = "GD_TEST01"
+
+  val REPARTITION = 6;
 
 
 //  val DATABASE_URL = List(
@@ -73,8 +75,16 @@ object KafkaVoucherConsumerTwo1 {
     val properties = new Properties()
     properties.put("user",    dsArray(1))
     properties.put("password",dsArray(2))
-    properties.put("numPartitions", "8")
+    properties.put("numPartitions", REPARTITION.toString)
     sparkSession.read.jdbc(dsArray.head, talbe, properties)
+  }
+
+  def getTableDF(talbe: String, briefMeta: BriefMeta, sparkSession: SparkSession): DataFrame = {
+    val properties = new Properties()
+    properties.put("user",    briefMeta.user)
+    properties.put("password", briefMeta.password)
+    properties.put("numPartitions", REPARTITION.toString)
+    sparkSession.read.jdbc(briefMeta.url, talbe, properties)
   }
 
   /**
@@ -107,7 +117,7 @@ object KafkaVoucherConsumerTwo1 {
         .where(querySubjectInfoStr)
         .join(emptyRecord, Seq("company_id", "subject_code"))
         .convertNames()
-        .repartition(8, $"companyId",$"subjectCode")
+        .repartition(REPARTITION, $"companyId",$"subjectCode")
         .as[SubjectInfoBrief]
 //      rd.rdd.sortBy(_.accountPeriod).p
       rd.foreachPartition(p => {
@@ -154,7 +164,7 @@ object KafkaVoucherConsumerTwo1 {
 
       result.convertNames()
         .as[SubjectBalance]
-        .repartition(8, $"companyId",$"subjectCode")
+        .repartition(REPARTITION, $"companyId",$"subjectCode")
         .foreachPartition(p => {
           if(!p.isEmpty){
             val c = p.flatMap(f => {
@@ -193,7 +203,7 @@ object KafkaVoucherConsumerTwo1 {
       //ds.show()
       implicit val rowEncoder = Encoders.kryo[Array[Any]]
       val dd = ds.orderBy("companyId","accountPeriod", "subjectCode")
-        .repartition(8,$"companyId",$"subjectCode")//重新分区
+        .repartition(REPARTITION,$"companyId",$"subjectCode")//重新分区
         .flatMap(m=>{
         //val l = new java.util.ArrayList[SubjectBalanceSlim]()
         //查看凭证发生日至今的月份间隔，缺失月份要先补
@@ -316,30 +326,60 @@ object KafkaVoucherConsumerTwo1 {
         /**
           * 2、查询科目表指定公司，指定科目的最小，最大会计属期
           */
-
         val balanceDF = DATABASE_URL.map(url => getTableDF(TARGET_TABLE, url, sparkSession)).reduce(_.union(_))
-        val balanceFilterDF = balanceDF
-          .where(queryMinAndMaxStr)
-          .groupBy("company_id","subject_code")
-          .agg(expr("min(account_period) as accountPeriodStart"),expr("max(account_period) as accountPeriodEnd"))
-          .selectExpr("company_id as companyId", "subject_code as subjectCode", "accountPeriodStart", "accountPeriodEnd")
-        /**
-          * 3、将步骤1和步骤2结果并集
-          */
 
-        val crossDF = dstreamDF.join(balanceFilterDF, Seq("companyId", "subjectCode"), "left_outer")
-//          .repartition(8,$"companyId",$"subjectCode")
-        /**
-          * 4.1 匹配不上的记录,补到最新
-          */
+        JMETA.foreach(p => {
+          val balanceDF = getTableDF(TARGET_TABLE, p._2, sparkSession)
+          val balanceFilterDF = balanceDF
+            .where(queryMinAndMaxStr)
+            .groupBy("company_id","subject_code")
+            .agg(expr("min(account_period) as accountPeriodStart"),expr("max(account_period) as accountPeriodEnd"))
+            .selectExpr("company_id as companyId", "subject_code as subjectCode", "accountPeriodStart", "accountPeriodEnd")
+          /**
+            * 3、将步骤1和步骤2结果并集
+            */
 
-//        val sqlConnectField2 = Seq("company_id", "subject_code")
-        val infoDF = DATABASE_URL.map(url => getTableDF("cd_subject_info", url, sparkSession)).reduce(_.union(_))
-//        val pNum = rdd.getNumPartitions
+          val crossDF = dstreamDF.join(balanceFilterDF, Seq("companyId", "subjectCode"), "left_outer")
+          //          .repartition(8,$"companyId",$"subjectCode")
+          /**
+            * 4.1 匹配不上的记录,补到最新
+            */
 
-        before(crossDF, infoDF, sparkSession)
-        after(crossDF, balanceDF, sparkSession)
-        updateR(dstreamDF, balanceDF, sparkSession)
+          //        val sqlConnectField2 = Seq("company_id", "subject_code")
+          val infoDF = DATABASE_URL.map(url => getTableDF("cd_subject_info", url, sparkSession)).reduce(_.union(_))
+          //        val pNum = rdd.getNumPartitions
+
+          before(crossDF, infoDF, sparkSession)
+          after(crossDF, balanceDF, sparkSession)
+          updateR(dstreamDF, balanceDF, sparkSession)
+        })
+
+        DATABASE_URL.foreach(url=> {
+          val balanceDF = getTableDF(TARGET_TABLE, url, sparkSession)
+          val balanceFilterDF = balanceDF
+            .where(queryMinAndMaxStr)
+            .groupBy("company_id","subject_code")
+            .agg(expr("min(account_period) as accountPeriodStart"),expr("max(account_period) as accountPeriodEnd"))
+            .selectExpr("company_id as companyId", "subject_code as subjectCode", "accountPeriodStart", "accountPeriodEnd")
+          /**
+            * 3、将步骤1和步骤2结果并集
+            */
+
+          val crossDF = dstreamDF.join(balanceFilterDF, Seq("companyId", "subjectCode"), "left_outer")
+          //          .repartition(8,$"companyId",$"subjectCode")
+          /**
+            * 4.1 匹配不上的记录,补到最新
+            */
+
+          //        val sqlConnectField2 = Seq("company_id", "subject_code")
+          val infoDF = DATABASE_URL.map(url => getTableDF("cd_subject_info", url, sparkSession)).reduce(_.union(_))
+          //        val pNum = rdd.getNumPartitions
+
+          before(crossDF, infoDF, sparkSession)
+          after(crossDF, balanceDF, sparkSession)
+          updateR(dstreamDF, balanceDF, sparkSession)
+        })
+
 
         //保存offset
         stream.asInstanceOf[CanCommitOffsets].commitAsync(offsetRanges)

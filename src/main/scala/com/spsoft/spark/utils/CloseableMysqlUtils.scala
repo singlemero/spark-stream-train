@@ -1,13 +1,11 @@
 package com.spsoft.spark.utils
 
-import java.sql.{Connection, SQLException}
-
+import com.spsoft.spark.utils.EnhanceUtils._
 import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
 import javax.sql.DataSource
 import org.apache.commons.lang3.StringUtils
 import org.apache.spark.TaskContext
 import org.slf4j.LoggerFactory
-import EnhanceUtils._
 
 import scala.util.{Failure, Success, Try}
 
@@ -17,6 +15,39 @@ import scala.util.{Failure, Success, Try}
 object CloseableMysqlUtils {
   private val LOG = LoggerFactory.getLogger(CloseableMysqlUtils.getClass)
 
+  lazy val dataSourceMap = scala.collection.mutable.Map[BriefMeta, DataSource]()
+
+
+  def getDS(briefMeta: BriefMeta) ={
+    dataSourceMap.get(briefMeta).getOrElse(build(briefMeta))
+//    Option(dataSourceMap(briefMeta)) match {
+//      case Some(x) => x
+//      case None => build(briefMeta)
+//    }
+  }
+
+  def build(briefMeta: BriefMeta) = {
+    LOG.info(s"DataSource ${briefMeta.url}")
+    val config = new HikariConfig
+    config.setJdbcUrl(briefMeta.url)
+    config.setUsername(briefMeta.user)
+    config.setPassword(briefMeta.password)
+    config.addDataSourceProperty("cachePrepStmts", "true")
+    config.addDataSourceProperty("prepStmtCacheSize", "250")
+    config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048")
+    config.addDataSourceProperty("maximumPoolSize", "20")
+    config.setConnectionInitSql("select 1")
+    config.setConnectionTestQuery("select 1")
+    config.addHealthCheckProperty("connectivityCheckTimeoutMs", "1000")
+    //    config.setValidationTimeout()
+    //    config.addHealthCheckProperty()
+    val rs = Try(new HikariDataSource(config)).transform(s=> Success(s),e=>{
+      LOG.error("Error Create Mysql Connection", e)
+      Failure(e)
+    }).get
+    dataSourceMap+=(briefMeta -> rs)
+    rs
+  }
 
   lazy val config: HikariConfig = {
     LOG.info(s"DataSource ${DataSourceProperties.get("url")}")
@@ -44,14 +75,15 @@ object CloseableMysqlUtils {
   }
 
 
-  def executeBatch(string: String, data: Iterator[Array[Any]]) = {
+
+
+  def executeBatch(string: String, data: Iterator[Array[Any]])(implicit db: BriefMeta) = {
     require(StringUtils.isNoneBlank(string),"prepared execute string cannot be null or empty")
     require(!data.isEmpty,"prepared execute data cannot be empty")
-    autoClose(dataSource.getConnection) { conn =>
+    autoClose(getDS(db).getConnection) { conn =>
       conn.setAutoCommit(false)
       val prepare = conn.prepareStatement(string)
       data.foreach(row => {
-//        println(row)
         for (i <- 1 to row.length) {
           row(i - 1) match {
             case x: BigDecimal => prepare.setObject(i, x.bigDecimal)
@@ -66,9 +98,9 @@ object CloseableMysqlUtils {
     }
   }
 
-  def executeBatch(sqlArray: Iterator[String]) = {
+  def executeBatch(sqlArray: Iterator[String])(implicit db: BriefMeta) = {
     require(!sqlArray.isEmpty,"prepared execute sql array cannot be empty")
-    autoClose(dataSource.getConnection) { conn =>
+    autoClose(getDS(db).getConnection) { conn =>
       conn.setAutoCommit(false)
       val stmt = conn.createStatement()
       //println(sqlArray.isEmpty)

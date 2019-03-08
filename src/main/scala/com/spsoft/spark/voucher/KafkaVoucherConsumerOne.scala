@@ -35,7 +35,7 @@ object KafkaVoucherConsumerOne {
 
     val sparkSession = SparkSession.builder()
       .appName("ClassifyVoucherCode")
-//      .master(ApplicationProperties.get("spark.master"))
+      .master(ApplicationProperties.get("spark.master"))
       .config("spark.streaming.stopGracefullyOnShutdown","true")
       .config("spark.sql.session.timeZone","Asia/Shanghai")
       .getOrCreate()

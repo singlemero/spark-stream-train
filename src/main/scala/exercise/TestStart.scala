@@ -1,5 +1,8 @@
 package exercise
 
+/**
+  *  调用发送信息到KAFKA
+  */
 object TestStart {
 
   def main(args: Array[String]): Unit = {

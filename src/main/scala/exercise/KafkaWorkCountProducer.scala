@@ -15,8 +15,8 @@ import scala.collection.mutable
 class KafkaWorkCountProducer(topic: String) extends Runnable{
 
 //  val ZK_NODES = "192.168.55.235:9092,192.168.55.236:9092"
-//  val ZK_NODES = "192.168.55.209:9092,192.168.55.210:9092"
-val ZK_NODES = "192.168.55.226:9092"
+  val ZK_NODES = "192.168.55.209:9092,192.168.55.210:9092"
+//val ZK_NODES = "192.168.55.226:9092"
   override def run(): Unit = {
     import org.apache.kafka.clients.producer.ProducerRecord
     import org.apache.kafka.clients.producer._

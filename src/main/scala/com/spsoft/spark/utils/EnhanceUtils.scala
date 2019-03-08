@@ -24,7 +24,8 @@ object EnhanceUtils {
   private def tryAutoClose[A <: AutoCloseable,B](closeable: A)(fun: (A) => B): Try[B] = {
     Try(fun(closeable)).transform(
       result => {
-        closeable.close()
+        //TODO, 尝试不自动关闭
+//        closeable.close()
         Success(result)
       },
       e => {

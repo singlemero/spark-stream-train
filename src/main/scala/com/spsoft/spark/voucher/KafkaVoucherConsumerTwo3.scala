@@ -438,7 +438,7 @@ object KafkaVoucherConsumerTwo3 {
       val sqlArray = for(d <- data) yield {
         update.format(d: _*)
       }
-      CloseableMysqlUtils.executeBatch(sqlArray)
+//      CloseableMysqlUtils.executeBatch(sqlArray)
   }
 
   }
@@ -458,7 +458,7 @@ object KafkaVoucherConsumerTwo3 {
                          |YEAR_DEBIT_AMOUNT, YEAR_CREDIT_AMOUNT,YEAR_CREDIT_QTY,YEAR_DEBIT_QTY, YEAR_DEBIT_NOCARRY_AMOUNT, YEAR_CREDIT_NOCARRY_AMOUNT,
                          |SUBJECT_PARENT_CODE, CREATE_TIME)
                          |VALUES(?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?,?)""".stripMargin.replaceAll("\n", StringUtils.EMPTY)
-      CloseableMysqlUtils.executeBatch(executeSQL, data)
+//      CloseableMysqlUtils.executeBatch(executeSQL, data)
     }
   }
 }
